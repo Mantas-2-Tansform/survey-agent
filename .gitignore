@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+
+# Environment variables
+.env
+
+# Shell script (ignore start file)
+start.sh
+
+# OS
+.DS_Store
+Thumbs.db

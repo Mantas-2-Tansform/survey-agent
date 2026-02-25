@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ABC Survey — Voice Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════
+   DESIGN TOKENS  — dark (default)
+═══════════════════════════════════ */
+:root {
+  --bg-primary:   #0a0e17;
+  --bg-secondary: #111827;
+  --bg-card:      #1a2234;
+  --bg-card-hover:#232d42;
+  --bg-elevated:  #243049;
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-medium: rgba(255,255,255,0.1);
+  --text-primary:  #f1f5f9;
+  --text-secondary:#94a3b8;
+  --text-muted:    #64748b;
+  --accent-blue:   #3b82f6;
+  --accent-blue-hover:#60a5fa;
+  --accent-green:  #10b981;
+  --accent-green-glow:rgba(16,185,129,0.2);
+  --accent-red:    #ef4444;
+  --accent-red-glow:rgba(239,68,68,0.2);
+  --accent-amber:  #f59e0b;
+  --accent-purple: #8b5cf6;
+  --gradient-blue: linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);
+  --gradient-green:linear-gradient(135deg,#10b981 0%,#059669 100%);
+  --gradient-red:  linear-gradient(135deg,#ef4444 0%,#dc2626 100%);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,.3);
+  --shadow-md:  0 8px 24px rgba(0,0,0,.4);
+  --shadow-lg:  0 16px 48px rgba(0,0,0,.5);
+  --shadow-glow-blue: 0 0 30px rgba(59,130,246,.3);
+  --shadow-glow-green:0 0 30px rgba(16,185,129,.3);
+  --radius-sm:4px; --radius-md:12px; --radius-lg:16px; --radius-xl:24px;
+}
+
+/* ─── Light theme ─── */
+[data-theme="light"] {
+  --bg-primary:   #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card:      #ffffff;
+  --bg-card-hover:#f1f5f9;
+  --bg-elevated:  #e2e8f0;
+  --border-subtle:rgba(0,0,0,0.06);
+  --border-medium:rgba(0,0,0,0.12);
+  --text-primary: #0f172a;
+  --text-secondary:#475569;
+  --text-muted:   #64748b;
+  --accent-blue:  #2563eb;
+  --accent-blue-hover:#3b82f6;
+  --accent-green: #059669;
+  --accent-green-glow:rgba(5,150,105,0.15);
+  --accent-red:   #dc2626;
+  --accent-red-glow:rgba(220,38,38,0.15);
+  --accent-amber: #d97706;
+  --accent-purple:#7c3aed;
+  --gradient-blue:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);
+  --gradient-green:linear-gradient(135deg,#10b981 0%,#059669 100%);
+  --gradient-red: linear-gradient(135deg,#ef4444 0%,#dc2626 100%);
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:  0 4px 12px rgba(0,0,0,.1);
+  --shadow-lg:  0 10px 30px rgba(0,0,0,.12);
+  --shadow-glow-blue: 0 0 20px rgba(37,99,235,.2);
+  --shadow-glow-green:0 0 20px rgba(5,150,105,.2);
+}
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse at 20% 0%,rgba(59,130,246,.05) 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 100%,rgba(139,92,246,.04) 0%,transparent 50%);
+}
+[data-theme="light"] .card { box-shadow:var(--shadow-sm); }
+[data-theme="light"] .msg.user .msg-content { background:#f1f5f9; border-color:#e2e8f0; }
+[data-theme="light"] .msg.ai   .msg-content { background:rgba(37,99,235,.08); border-color:rgba(37,99,235,.2); }
+[data-theme="light"] .msg.sys  .msg-content { background:#f1f5f9; }
+[data-theme="light"] .conversation-body { background:#f8fafc; }
+[data-theme="light"] .voice-analysis { background:#f8fafc; }
+[data-theme="light"] details summary { color:var(--text-primary); }
+
+/* ═══════════════════════════════════
+   BASE
+═══════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+  background:var(--bg-primary);
+  color:var(--text-primary);
+  min-height:100vh;
+  background-image:
+    radial-gradient(ellipse at 20% 0%,rgba(59,130,246,.08) 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 100%,rgba(139,92,246,.06) 0%,transparent 50%);
+}
+
+/* ═══════════════════════════════════
+   HEADER
+═══════════════════════════════════ */
+.header-bar{
+  background:var(--bg-secondary);
+  border-bottom:1px solid var(--border-subtle);
+  padding:16px 32px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:50;
+  backdrop-filter:blur(12px);
+}
+.logo{ display:flex; align-items:center; gap:12px; }
+.logo-icon{
+  width:40px;height:40px;
+  background:var(--gradient-blue);
+  border-radius:var(--radius-md);
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;
+  box-shadow:var(--shadow-glow-blue);
+}
+.logo-text{ font-weight:700;font-size:20px;letter-spacing:-.5px; }
+.logo-text span{ color:var(--accent-blue); }
+
+.header-right{ display:flex;align-items:center;gap:14px; }
+
+/* Company logo image — top right */
+.company-logo{
+  height:36px; width:auto; object-fit:contain;
+  opacity:.9; transition:opacity .2s;
+}
+.company-logo:hover{ opacity:1; }
+
+.theme-toggle{
+  background:var(--bg-elevated);
+  border:1px solid var(--border-medium);
+  color:var(--text-primary);
+  padding:8px 12px;
+  border-radius:var(--radius-md);
+  cursor:pointer;
+  display:flex;align-items:center;gap:6px;
+  font-size:14px; font-family:inherit; font-weight:600;
+  transition:all .2s;
+}
+.theme-toggle:hover{background:var(--bg-card-hover);border-color:var(--accent-blue);}
+
+/* ═══════════════════════════════════
+   LAYOUT
+═══════════════════════════════════ */
+.main-container{
+  max-width:1200px;
+  margin:0 auto;
+  padding:24px 32px;
+  display:grid;
+  grid-template-columns:340px 1fr;
+  gap:24px;
+}
+@media(max-width:960px){
+  .main-container{grid-template-columns:1fr;padding:16px;}
+}
+.sidebar{display:flex;flex-direction:column;gap:20px;}
+.main-content{display:flex;flex-direction:column;gap:20px;}
+
+/* ═══════════════════════════════════
+   CARDS
+═══════════════════════════════════ */
+.card{
+  background:var(--bg-card);
+  border:1px solid var(--border-subtle);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  transition:border-color .2s;
+}
+.card:hover{border-color:var(--border-medium);}
+.card-header{
+  padding:16px 20px;
+  border-bottom:1px solid var(--border-subtle);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.card-title{
+  font-weight:600;font-size:13px;
+  text-transform:uppercase;letter-spacing:.5px;
+  color:var(--text-secondary);
+  display:flex;align-items:center;gap:8px;
+}
+.card-body{padding:20px;}
+
+/* ═══════════════════════════════════
+   STATUS BADGE
+═══════════════════════════════════ */
+.status-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 16px;border-radius:999px;
+  font-size:13px;font-weight:600;
+  width:100%;justify-content:center;
+  border:1px solid transparent;
+  transition:all .3s;
+}
+.status-badge.disconnected{background:rgba(239,68,68,.15);color:#fca5a5;border-color:rgba(239,68,68,.3);}
+.status-badge.connecting  {background:rgba(245,158,11,.15);color:#fcd34d;border-color:rgba(245,158,11,.3);}
+.status-badge.ready       {background:rgba(59,130,246,.15); color:#93c5fd;border-color:rgba(59,130,246,.3);}
+.status-badge.active      {background:rgba(16,185,129,.15); color:#6ee7b7;border-color:rgba(16,185,129,.3);}
+.status-badge.complete    {background:rgba(139,92,246,.15); color:#c4b5fd;border-color:rgba(139,92,246,.3);}
+
+.status-dot{width:8px;height:8px;border-radius:50%;animation:pulse-dot 2s infinite;}
+.disconnected .status-dot{background:var(--accent-red);}
+.connecting   .status-dot{background:var(--accent-amber);}
+.ready        .status-dot{background:var(--accent-blue);}
+.active       .status-dot{background:var(--accent-green);}
+.complete     .status-dot{background:var(--accent-purple);}
+@keyframes pulse-dot{
+  0%,100%{opacity:1;transform:scale(1);}
+  50%{opacity:.5;transform:scale(.85);}
+}
+
+/* ═══════════════════════════════════
+   BUTTONS
+═══════════════════════════════════ */
+button{
+  font-family:inherit;font-size:14px;font-weight:600;
+  padding:12px 20px;border-radius:var(--radius-md);
+  border:none;cursor:pointer;
+  transition:all .2s;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+}
+button:disabled{opacity:.4;cursor:not-allowed;}
+button.primary{background:var(--gradient-blue);color:#fff;box-shadow:var(--shadow-sm);width:100%;}
+button.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:var(--shadow-md),var(--shadow-glow-blue);}
+button.warn{background:var(--gradient-red);color:#fff;width:100%;}
+button.warn:hover:not(:disabled){box-shadow:var(--shadow-md),0 0 30px rgba(239,68,68,.3);}
+button.secondary{
+  background:var(--bg-elevated);color:var(--text-primary);
+  border:1px solid var(--border-medium);
+}
+button.secondary:hover:not(:disabled){background:var(--bg-card-hover);border-color:var(--text-muted);}
+
+/* ═══════════════════════════════════
+   MIC BUTTON  (matches voice_client exactly)
+═══════════════════════════════════ */
+.mic-btn{
+  width:64px;height:64px;
+  border-radius:50%;
+  background:var(--gradient-green);
+  color:#fff;font-size:24px;
+  border:none;cursor:default;
+  transition:all .3s;
+  box-shadow:var(--shadow-md);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  pointer-events:none; /* purely a status indicator — not interactive */
+}
+.mic-btn.live{
+  background:var(--gradient-red);
+  animation:pulse-mic 1.5s infinite;
+}
+.mic-btn.idle{
+  background:var(--bg-elevated);
+  box-shadow:none;
+}
+@keyframes pulse-mic{
+  0%,100%{transform:scale(1);   box-shadow:var(--shadow-md),0 0 0  0 rgba(239,68,68,.4);}
+  50%    {transform:scale(1.05);box-shadow:var(--shadow-lg),0 0 0 20px rgba(239,68,68,0);}
+}
+
+/* ═══════════════════════════════════
+   CALL CONTROLS  BAR
+═══════════════════════════════════ */
+.call-controls{
+  display:flex;align-items:center;gap:16px;
+  padding:20px;
+  background:var(--bg-card);
+  border:1px solid var(--border-subtle);
+  border-radius:var(--radius-lg);
+}
+.call-status{flex:1;padding-left:4px;}
+.call-status-label{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px;}
+.call-status-value{font-size:15px;font-weight:600;color:var(--text-primary);}
+.call-actions{display:flex;gap:8px;}
+
+/* ═══════════════════════════════════
+   VOICE ANALYSIS  (sidebar)
+═══════════════════════════════════ */
+.voice-analysis{
+  margin:0 16px 16px;
+  padding:16px;
+  background:var(--bg-secondary);
+  border-radius:var(--radius-md);
+  border:1px solid var(--border-subtle);
+  transition:border-color .4s;
+}
+.voice-analysis-title{
+  font-size:12px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.5px;
+  color:var(--accent-purple);
+  margin-bottom:8px;
+  display:flex;align-items:center;gap:6px;
+}
+
+/* ═══════════════════════════════════
+   CONVERSATION
+═══════════════════════════════════ */
+.conversation-body{
+  padding:20px;overflow-y:auto;
+  min-height:320px;max-height:460px;
+}
+.msg{
+  margin-bottom:16px;display:flex;gap:12px;
+  animation:fadeIn .3s ease;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.msg-avatar{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;flex-shrink:0;
+}
+.msg.user .msg-avatar{background:var(--bg-elevated);color:var(--text-secondary);}
+.msg.ai   .msg-avatar{background:var(--gradient-blue);color:#fff;}
+.msg.sys  .msg-avatar{background:var(--bg-elevated);color:var(--text-muted);}
+.msg-content{
+  flex:1;padding:12px 16px;
+  border-radius:var(--radius-md);
+  font-size:14px;line-height:1.6;
+}
+.msg.user .msg-content{background:var(--bg-secondary);border:1px solid var(--border-subtle);}
+.msg.ai   .msg-content{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);}
+.msg.sys  .msg-content{background:var(--bg-elevated);color:var(--text-muted);font-style:italic;font-size:13px;}
+
+/* ═══════════════════════════════════
+   OUTCOME / SURVEY RESULT
+═══════════════════════════════════ */
+.outcome-panel{
+  background:var(--bg-card);
+  border:1px solid rgba(16,185,129,.3);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+}
+.outcome-header{
+  padding:16px 20px;
+  background:rgba(16,185,129,.08);
+  border-bottom:1px solid rgba(16,185,129,.2);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.outcome-title{font-weight:700;color:var(--accent-green);display:flex;align-items:center;gap:8px;font-size:15px;}
+.outcome-grid{
+  display:grid;grid-template-columns:200px 1fr;
+  gap:10px 16px;padding:20px;
+}
+.outcome-label{font-size:13px;color:var(--text-muted);display:flex;align-items:center;}
+.outcome-value{font-size:14px;font-weight:600;color:var(--text-primary);}
+
+/* Saved badge */
+.badge-success{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(16,185,129,.15);color:#6ee7b7;
+  border:1px solid rgba(16,185,129,.3);
+  border-radius:999px;padding:4px 12px;
+  font-size:12px;font-weight:600;
+}
+
+/* ═══════════════════════════════════
+   ACCORDIONS
+═══════════════════════════════════ */
+details{
+  background:var(--bg-card);
+  border:1px solid var(--border-subtle);
+  border-radius:var(--radius-md);
+  overflow:hidden;
+}
+details summary{
+  padding:14px 16px;cursor:pointer;
+  font-weight:600;font-size:13px;
+  color:var(--text-secondary);
+  display:flex;align-items:center;gap:8px;
+  transition:background .2s;list-style:none;
+}
+details summary::-webkit-details-marker{display:none;}
+details summary::before{content:'▸';transition:transform .2s;}
+details[open] summary::before{transform:rotate(90deg);}
+details summary:hover{background:var(--bg-card-hover);}
+details[open]{border-color:var(--border-medium);}
+details > div{padding:16px;border-top:1px solid var(--border-subtle);}
+
+.transcript-text{
+  white-space:pre-wrap;font-size:13px;line-height:1.7;
+  color:var(--text-secondary);max-height:300px;overflow-y:auto;
+  font-family:'DM Sans',sans-serif;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     HEADER
+══════════════════════════════════ -->
+<div class="header-bar">
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <div class="logo-text">ABC <span>Survey</span></div>
+  </div>
+
+  <div class="header-right">
+    <!-- Dashboard link — always visible -->
+    <a href="/dashboard" target="_blank" style="text-decoration:none;">
+      <button class="theme-toggle" style="
+        background:linear-gradient(135deg,rgba(184,255,87,0.12),rgba(87,217,255,0.08));
+        border-color:rgba(184,255,87,0.3);color:#b8ff57;gap:6px;
+      ">
+        📊 Dashboard
+      </button>
+    </a>
+
+    <!-- Theme toggle -->
+    <button class="theme-toggle" id="themeToggle" title="Toggle light/dark theme">
+      <span id="themeIcon">☀️</span>
+      <span id="themeLabel">Light</span>
+    </button>
+
+    <!-- Company logo — update src to your actual image path -->
+    <img id="companyLogo"
+        src="/static/M2T_LOGO.png"
+         alt="Company Logo"
+         class="company-logo"
+         onerror="this.style.display='none'" />
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MAIN LAYOUT
+══════════════════════════════════ -->
+<div class="main-container">
+
+  <!-- ── SIDEBAR ── -->
+  <div class="sidebar">
+
+    <!-- Connection status -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📡 Connection</div>
+      </div>
+      <div class="card-body" style="padding:14px;">
+        <div id="statusBadge" class="status-badge disconnected">
+          <span class="status-dot"></span>
+          <span id="statusText">Disconnected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📞 Survey Controls</div>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.5;">
+          Sneha will introduce herself and begin the survey. Your mic activates automatically once connected.
+        </p>
+        <button id="connectBtn" class="primary">📞 Start Survey</button>
+        <button id="disconnectBtn" class="warn" disabled>⏹ End Call</button>
+      </div>
+    </div>
+
+    <!-- Voice gender analysis — shown after call starts -->
+    <div class="card" id="voiceAnalysisCard" style="display:none;">
+      <div class="card-header">
+        <div class="card-title" style="color:var(--accent-purple);">🎤 Voice Analysis</div>
+      </div>
+      <div class="voice-analysis" id="voiceAnalysisPanel">
+        <div class="voice-analysis-title">🎤 Gender Detection</div>
+        <div id="genderDisplay" style="font-size:15px;font-weight:600;">Gender: —</div>
+        <div id="confidenceDisplay" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Confidence: —</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px;font-style:italic;line-height:1.4;">
+          Analysed from respondent voice only.<br>AI speech is excluded from detection.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ── MAIN CONTENT ── -->
+  <div class="main-content">
+
+    <!-- Call Controls bar with pulsing mic -->
+    <div class="call-controls">
+      <!-- Mic status indicator — mirrors voice_client's mic-btn -->
+      <div id="micBtn" class="mic-btn idle" title="Microphone status">🎤</div>
+
+      <div class="call-status">
+        <div class="call-status-label">Microphone Status</div>
+        <div id="micState" class="call-status-value" style="color:var(--text-muted);">
+          Waiting for call…
+        </div>
+      </div>
+
+      <div class="call-actions">
+        <button id="endCallBtn" class="secondary" disabled
+                style="background:var(--gradient-red);color:#fff;border:none;padding:10px 18px;">
+          ⏹ End Call
+        </button>
+      </div>
+    </div>
+
+    <!-- Live conversation -->
+    <div class="card" style="flex:1;">
+      <div class="card-header">
+        <div class="card-title">
+          <span>💬</span> Live Conversation
+        </div>
+      </div>
+      <div id="conversationEl" class="conversation-body">
+        <div class="msg sys">
+          <div class="msg-avatar">ℹ️</div>
+          <div class="msg-content">
+            Click "Start Survey" to begin. Sneha will greet you and the mic will activate automatically.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Survey result — shown after call completes -->
+    <div id="surveyResult" class="outcome-panel" style="display:none;">
+      <div class="outcome-header">
+        <div class="outcome-title">✅ Survey Complete</div>
+        <span class="badge-success">✓ Saved to Google Sheet</span>
+      </div>
+      <div class="outcome-grid" id="surveyAnswers"></div>
+
+      <div style="padding:0 20px 20px;">
+        <details>
+          <summary>📄 View Full Transcript</summary>
+          <div>
+            <pre id="fullTranscript" class="transcript-text">(no transcript)</pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /main-container -->
+
+<!-- ══════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════ -->
+<script>
+const WS_URL = 'ws://localhost:8000/ws';
+
+/* ── DOM refs ── */
+const connectBtn      = document.getElementById('connectBtn');
+const disconnectBtn   = document.getElementById('disconnectBtn');
+const endCallBtn      = document.getElementById('endCallBtn');
+const statusBadge     = document.getElementById('statusBadge');
+const statusText      = document.getElementById('statusText');
+const micBtn          = document.getElementById('micBtn');
+const micState        = document.getElementById('micState');
+const conversationEl  = document.getElementById('conversationEl');
+const surveyResultEl  = document.getElementById('surveyResult');
+const surveyAnswersEl = document.getElementById('surveyAnswers');
+const fullTranscriptEl= document.getElementById('fullTranscript');
+const voiceAnalysisCard=document.getElementById('voiceAnalysisCard');
+const voiceAnalysisPanel=document.getElementById('voiceAnalysisPanel');
+const genderDisplay   = document.getElementById('genderDisplay');
+const confidenceDisplay=document.getElementById('confidenceDisplay');
+
+/* ── Audio state ── */
+let websocket       = null;
+let audioContext    = null;
+let mediaStream     = null;
+let audioWorklet    = null;
+let playbackContext = null;
+let nextStartTime   = 0;
+let micAlwaysOn     = false;
+
+/*
+ * ════════════════════════════════════════
+ *  isAiSpeaking  — THE KEY GENDER FIX
+ *
+ *  When true, audio chunks captured from the
+ *  microphone are NOT forwarded to the backend.
+ *  This means the server-side gender sample
+ *  buffer only ever accumulates the respondent's
+ *  voice, never the AI's synthetic female voice.
+ * ════════════════════════════════════════
+ */
+let isAiSpeaking = false;
+
+/* ── Theme toggle ── */
+let isDark = true;
+document.documentElement.setAttribute('data-theme', 'dark');
+document.getElementById('themeToggle').addEventListener('click', () => {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('themeIcon').textContent  = isDark ? '☀️' : '🌙';
+  document.getElementById('themeLabel').textContent = isDark ? 'Light' : 'Dark';
+});
+
+/* ── Helpers ── */
+function setStatus(cls, text) {
+  statusBadge.className = `status-badge ${cls}`;
+  statusText.textContent = text;
+}
+
+function setMicState(state) {
+  /* state: 'idle' | 'live' | 'ai-speaking' */
+  micBtn.className = 'mic-btn';
+  if (state === 'live') {
+    micBtn.classList.add('live');
+    micState.textContent = 'Listening — speak anytime';
+    micState.style.color = 'var(--accent-green)';
+  } else if (state === 'ai-speaking') {
+    micBtn.classList.add('live');   /* keep pulsing red while AI talks */
+    micState.textContent = 'Sneha is speaking…';
+    micState.style.color = 'var(--accent-amber)';
+  } else {
+    micBtn.classList.add('idle');
+    micState.textContent = 'Waiting for call…';
+    micState.style.color = 'var(--text-muted)';
+  }
+}
+
+function addMessage(role, text) {
+  /* Remove any matching partial bubble first */
+  const old = document.getElementById(`partial-${role}`);
+  if (old) old.remove();
+
+  const wrap    = document.createElement('div');
+  wrap.className = `msg ${role === 'assistant' ? 'ai' : role === 'user' ? 'user' : 'sys'}`;
+  const av      = document.createElement('div');
+  av.className  = 'msg-avatar';
+  av.textContent = role === 'assistant' ? '🤖' : role === 'user' ? '👤' : 'ℹ️';
+  const ct      = document.createElement('div');
+  ct.className  = 'msg-content';
+  ct.textContent = text;
+  wrap.appendChild(av);
+  wrap.appendChild(ct);
+  conversationEl.appendChild(wrap);
+  conversationEl.scrollTop = conversationEl.scrollHeight;
+}
+
+function updatePartial(role, text, isFinal) {
+  let partial = document.getElementById(`partial-${role}`);
+  if (!partial) {
+    partial = document.createElement('div');
+    partial.id = `partial-${role}`;
+    partial.className = `msg ${role === 'assistant' ? 'ai' : 'user'}`;
+    const av = document.createElement('div');
+    av.className = 'msg-avatar';
+    av.textContent = role === 'assistant' ? '🤖' : '👤';
+    const ct = document.createElement('div');
+    ct.className = 'msg-content';
+    partial.appendChild(av);
+    partial.appendChild(ct);
+    conversationEl.appendChild(partial);
+  }
+  partial.querySelector('.msg-content').textContent = text;
+  conversationEl.scrollTop = conversationEl.scrollHeight;
+  if (isFinal) partial.removeAttribute('id');
+}
+
+/* ── WebSocket message handler ── */
+async function handleMessage(msg) {
+  switch (msg.type) {
+
+    case 'ready':
+      setStatus('active', 'Call active — mic on');
+      setMicState('live');
+      addMessage('system', '🎙️ Connected. Sneha is about to speak…');
+      voiceAnalysisCard.style.display = 'block';
+      await initAudio();
+      micAlwaysOn = true;
+      break;
+
+    /* ── Streaming word chunk ── */
+    case 'transcript_chunk':
+      if (msg.role === 'assistant') {
+        /* AI is generating output: flag as speaking so mic audio is suppressed */
+        isAiSpeaking = true;
+        setMicState('ai-speaking');
+        const el = document.getElementById('partial-assistant');
+        const cur = el ? el.querySelector('.msg-content').textContent : '';
+        updatePartial('assistant', (cur + ' ' + msg.text).trim(), false);
+      } else {
+        updatePartial('user', msg.text, msg.is_final || false);
+      }
+      break;
+
+    /* ── Full assembled turn (turnComplete) ── */
+    case 'transcript':
+      addMessage(msg.role === 'assistant' ? 'assistant' : 'user', msg.text);
+      if (msg.role === 'assistant') {
+        /* The full turn text is here but audio may still be playing.
+           isAiSpeaking is cleared in turn_complete / interrupted. */
+      }
+      break;
+
+    /* ── Audio chunk to play ── */
+    case 'audio':
+      isAiSpeaking = true;
+      setMicState('ai-speaking');
+      await playAudioResponse(msg.data, msg.sample_rate);
+      break;
+
+    /* ── AI turn finished ── */
+    case 'turn_complete':
+      isAiSpeaking = false;
+      setMicState('live');
+      break;
+
+    /* ── User barged in / bot interrupted ── */
+    case 'interrupted':
+      isAiSpeaking = false;
+      /* Stop queued audio immediately */
+      if (playbackContext) { playbackContext.close(); playbackContext = null; }
+      nextStartTime = 0;
+      setMicState('live');
+      break;
+
+    /* ── Voice gender result from server ── */
+    case 'voice_gender_update': {
+      const g   = msg.detected_gender;   /* 'male' | 'female' | 'unknown' */
+      const pct = (msg.confidence * 100).toFixed(1);
+      const icon = g === 'male' ? '👨' : g === 'female' ? '👩' : '❓';
+
+      genderDisplay.textContent    = `${icon} Gender: ${(msg.gender_label || g).toUpperCase()}`;
+      confidenceDisplay.textContent= `Confidence: ${pct}%`;
+
+      /* Colour the panel border by confidence level — same logic as voice_client */
+      if (msg.confidence >= 0.8) {
+        voiceAnalysisPanel.style.borderColor = '#22c55e';  /* green  */
+      } else if (msg.confidence >= 0.6) {
+        voiceAnalysisPanel.style.borderColor = '#f59e0b';  /* amber  */
+      } else {
+        voiceAnalysisPanel.style.borderColor = '#ef4444';  /* red    */
+      }
+      addMessage('system',
+        `🎤 Voice gender detected: ${msg.gender_label} (${pct}% confidence)`);
+      break;
+    }
+
+    /* ── Survey finished ── */
+    case 'survey_result':
+      showSurveyResult(
+        msg.transcript, msg.answers, msg.call_id,
+        msg.detected_gender, msg.gender_label
+      );
+      addMessage('system', '✅ Survey complete. Results saved to Google Sheet.');
+      /* Auto-disconnect */
+      micAlwaysOn  = false;
+      isAiSpeaking = false;
+      if (websocket) { websocket.close(); websocket = null; }
+      cleanup();
+      setStatus('complete', 'Survey complete');
+      setMicState('idle');
+      connectBtn.disabled   = false;
+      disconnectBtn.disabled= true;
+      endCallBtn.disabled   = true;
+      break;
+
+    case 'inactivity_timeout':
+      addMessage('system', 'Call ended due to inactivity.');
+      doDisconnect();
+      break;
+
+    case 'conversation_ended':
+      addMessage('system', 'Call ended.');
+      doDisconnect();
+      break;
+
+    case 'error':
+      addMessage('system', `⚠️ Error: ${msg.message}`);
+      break;
+  }
+}
+
+/* ── Show survey result panel ── */
+function showSurveyResult(transcript, answers, callId, detectedGender, genderLabel) {
+  surveyResultEl.style.display = 'block';
+  const a = answers || {};
+
+  const genderIcon = detectedGender === 'male'   ? '👨'
+                   : detectedGender === 'female' ? '👩' : '❓';
+  const genderVal  = genderLabel
+    ? `${genderIcon} ${genderLabel} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(voice detected)</span>`
+    : (a.gender || '—');
+
+  const rows = [
+    ['Call ID',                  `<span style="font-family:monospace;font-size:12px">${callId || '—'}</span>`],
+    ['Age',                      a.age  || '—'],
+    ['Gender',                   genderVal],
+    ['State',                    a.state || '—'],
+    ['Q1 — Govt Satisfaction',   a.q1_satisfaction || '—'],
+    ['Q2 — Price Rise (0–5)',    a.q2_price_rise   || '—'],
+    ['Q3 — Vote for Govt',       a.q3_vote         || '—'],
+    ['Q4 — Greatest Sportsman',  a.q4_greatest_sportsman || '—'],
+    ['Q5 — Top 3 Concerns',      a.q5_top3_concerns || '—'],
+  ];
+
+  surveyAnswersEl.innerHTML = rows.map(([label, val]) => `
+    <div class="outcome-label">${label}</div>
+    <div class="outcome-value">${val}</div>
+  `).join('');
+
+  fullTranscriptEl.textContent = transcript || '(no transcript)';
+  surveyResultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── Connect ── */
+async function doConnect() {
+  surveyResultEl.style.display = 'none';
+  voiceAnalysisCard.style.display = 'none';
+  genderDisplay.textContent    = 'Gender: —';
+  confidenceDisplay.textContent= 'Confidence: —';
+  voiceAnalysisPanel.style.borderColor = '';
+  isAiSpeaking = false;
+
+  setStatus('connecting', 'Connecting…');
+  addMessage('system', 'Connecting to survey agent…');
+
+  websocket = new WebSocket(WS_URL);
+  websocket.binaryType = 'arraybuffer';
+
+  websocket.onopen = () => {
+    setStatus('ready', 'Connected — starting survey…');
+  };
+
+  websocket.onmessage = async (e) => {
+    try { await handleMessage(JSON.parse(e.data)); }
+    catch(err) { console.error('Message handler error', err); }
+  };
+
+  websocket.onerror = () => {
+    addMessage('system', '⚠️ Connection error.');
+    setStatus('disconnected', 'Connection error');
+  };
+
+  websocket.onclose = () => {
+    setStatus('disconnected', 'Disconnected');
+    connectBtn.disabled   = false;
+    disconnectBtn.disabled= true;
+    endCallBtn.disabled   = true;
+    setMicState('idle');
+    micAlwaysOn  = false;
+    isAiSpeaking = false;
+    cleanup();
+  };
+
+  connectBtn.disabled   = true;
+  disconnectBtn.disabled= false;
+  endCallBtn.disabled   = false;
+}
+
+/* ── Disconnect ── */
+function doDisconnect() {
+  if (websocket) {
+    try { websocket.send(JSON.stringify({ type: 'end_conversation' })); } catch {}
+    websocket.close();
+  }
+  cleanup();
+}
+
+/* ── Cleanup ── */
+function cleanup() {
+  if (mediaStream)    { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (audioContext)   { audioContext.close();   audioContext   = null; }
+  if (playbackContext){ playbackContext.close(); playbackContext = null; }
+  nextStartTime = 0;
+  audioWorklet  = null;
+  micAlwaysOn   = false;
+  isAiSpeaking  = false;
+  setMicState('idle');
+}
+
+/* ── Init microphone & audio worklet ── */
+async function initAudio() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate:16000, channelCount:1,
+               echoCancellation:true, noiseSuppression:true, autoGainControl:true }
+    });
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    await audioContext.audioWorklet.addModule(createWorkletBlob());
+    audioWorklet = new AudioWorkletNode(audioContext, 'audio-processor');
+
+    audioWorklet.port.onmessage = (event) => {
+      if (!micAlwaysOn || !websocket || websocket.readyState !== WebSocket.OPEN) return;
+
+      /*
+       * ══════════════════════════════════════════════
+       *  USER-ONLY AUDIO GATE
+       *
+       *  Do NOT send mic audio to the backend while
+       *  isAiSpeaking is true.  This is the client-side
+       *  half of the gender-detection fix:
+       *
+       *  • The server accumulates audio in _gender_sample_buffer
+       *    whenever it receives bytes from the client.
+       *  • If we gate audio here during AI playback, the buffer
+       *    fills exclusively with the respondent's voice — not
+       *    Sneha's synthetic female voice.
+       *
+       *  The server side already has the same flag
+       *  (_gender_analysis_triggered) so even if a stray
+       *  chunk slips through, the buffer limit (96 000 bytes)
+       *  means the first 3 s of *user* speech dominates.
+       * ══════════════════════════════════════════════
+       */
+      if (isAiSpeaking) return;
+
+      websocket.send(event.data);
+    };
+
+    source.connect(audioWorklet);
+    audioWorklet.connect(audioContext.destination);
+    console.log('✅ Audio pipeline ready');
+  } catch (err) {
+    console.error('Audio init error:', err);
+    addMessage('system', `⚠️ Microphone error: ${err.message}`);
+  }
+}
+
+/* ── Audio worklet PCM converter ── */
+function createWorkletBlob() {
+  const code = `
+    class AudioProcessor extends AudioWorkletProcessor {
+      constructor() { super(); this.buf = []; }
+      process(inputs) {
+        const ch = inputs[0]?.[0];
+        if (!ch) return true;
+        const out = new Int16Array(ch.length);
+        for (let i = 0; i < ch.length; i++) {
+          const s = Math.max(-1, Math.min(1, ch[i]));
+          out[i] = s < 0 ? s * 32768 : s * 32767;
+        }
+        this.port.postMessage(out.buffer, [out.buffer]);
+        return true;
+      }
+    }
+    registerProcessor('audio-processor', AudioProcessor);
+  `;
+  return URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+}
+
+/* ── Playback ── */
+async function playAudioResponse(base64Data, sampleRate) {
+  try {
+    if (!playbackContext) {
+      playbackContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: sampleRate || 24000
+      });
+      nextStartTime = playbackContext.currentTime;
+    }
+    if (playbackContext.state === 'suspended') await playbackContext.resume();
+
+    const bin = atob(base64Data);
+    const u8  = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+
+    const i16 = new Int16Array(u8.buffer);
+    const f32 = new Float32Array(i16.length);
+    for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+
+    const buf = playbackContext.createBuffer(1, f32.length, sampleRate || 24000);
+    buf.getChannelData(0).set(f32);
+
+    const src = playbackContext.createBufferSource();
+    src.buffer = buf;
+    src.connect(playbackContext.destination);
+
+    /* When the last queued chunk ends, clear the speaking flag */
+    src.onended = () => {
+      if (playbackContext && nextStartTime <= playbackContext.currentTime + 0.08) {
+        isAiSpeaking = false;
+        setMicState('live');
+      }
+    };
+
+    const start = Math.max(nextStartTime, playbackContext.currentTime);
+    src.start(start);
+    nextStartTime = start + buf.duration;
+  } catch (err) {
+    console.error('Playback error:', err);
+  }
+}
+
+/* ── Event wiring ── */
+connectBtn.addEventListener('click', doConnect);
+disconnectBtn.addEventListener('click', doDisconnect);
+endCallBtn.addEventListener('click', doDisconnect);
+</script>
+</body>
+</html>
