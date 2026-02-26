@@ -105,8 +105,15 @@ def extract_answers_from_transcript(transcript: str, detected_gender: str = None
         result["concern1"] = c1 or "No Response"
         result["concern2"] = c2 or "No Response"
         result["concern3"] = c3 or "No Response"
-        # Always override gender with voice-detected value if available
-        if detected_gender:
+        # Override gender with voice-detected value ONLY if the respondent
+        # participated in the survey. If they declined at the start, all fields
+        # (including gender) remain "No Response" regardless of voice analysis.
+        respondent_participated = any(
+            result.get(f) not in ("No Response", "", None)
+            for f in ("age", "state", "q1_satisfaction", "q2_price_rise",
+                      "q3_vote", "q4_greatest_sportsman")
+        )
+        if detected_gender and respondent_participated:
             result["gender"] = detected_gender
         return result
     except Exception as e:
@@ -123,8 +130,8 @@ def extract_answers_from_transcript(transcript: str, detected_gender: str = None
             "concern2": "No Response",
             "concern3": "No Response",
         }
-        if detected_gender:
-            result["gender"] = detected_gender
+        # On extraction failure we cannot confirm participation,
+        # so gender stays "No Response" to be safe.
         return result
 
 
