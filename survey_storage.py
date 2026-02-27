@@ -75,7 +75,8 @@ def extract_answers_from_transcript(transcript: str, detected_gender: str = None
         if model is None:
             raise Exception(f"No extraction model available. Last error: {last_error}")
         response = model.generate_content(
-            f"{EXTRACT_SURVEY_PROMPT}\n\n---\nTranscript:\n{transcript}"
+            f"{EXTRACT_SURVEY_PROMPT}\n\n---\nTranscript:\n{transcript}",
+            generation_config={"temperature": 0.0},  # deterministic — no creative filling
         )
         text = response.candidates[0].content.parts[0].text.strip()
         # Strip markdown code block if present
@@ -105,6 +106,20 @@ def extract_answers_from_transcript(transcript: str, detected_gender: str = None
         result["concern1"] = c1 or "No Response"
         result["concern2"] = c2 or "No Response"
         result["concern3"] = c3 or "No Response"
+
+        # ── Post-extraction sanity pass ──────────────────────────────────────
+        # Replace any empty string, None, or whitespace-only value with
+        # "No Response" so the sheet never receives a blank or hallucinated
+        # placeholder like "-", "N/A", "Unknown", "Not mentioned", etc.
+        _INVALID_PLACEHOLDERS = {
+            "", "none", "n/a", "na", "not mentioned", "not stated",
+            "unknown", "unclear", "-", "–", "—", "null", "not provided",
+            "not given", "not available", "no answer", "didn't say",
+        }
+        for key in result:
+            val = result[key]
+            if val is None or str(val).strip().lower() in _INVALID_PLACEHOLDERS:
+                result[key] = "No Response"
         # Override gender with voice-detected value ONLY if the respondent
         # participated in the survey. If they declined at the start, all fields
         # (including gender) remain "No Response" regardless of voice analysis.

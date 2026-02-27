@@ -75,11 +75,20 @@ body{
 .hdr-meta{font-size:12px;color:var(--fog);font-family:'DM Mono',monospace;}
 .hdr-right{display:flex;align-items:center;gap:10px;}
 /* Company logo — top right, matches client.html */
-.company-logo{
-  height:36px;width:auto;object-fit:contain;
-  opacity:.9;transition:opacity .2s;
+.company-logo {
+  height: 56px; /* Increased from 36px for much better visibility */
+  width: auto;
+  object-fit: contain;
+  opacity: 1; /* Removed the default dimming */
+  margin-left: 12px; /* Adds breathing room from the buttons */
+  transition: transform 0.2s ease;
+  /* Adds a soft white/glow behind the logo to separate it from the dark background */
+  filter: drop-shadow(0 2px 10px rgba(255, 255, 255, 0.15)); 
 }
-.company-logo:hover{opacity:1;}
+
+.company-logo:hover {
+  transform: scale(1.05); /* Slight zoom on hover instead of opacity change */
+}
 .chip{
   padding:6px 14px;border-radius:999px;
   font-size:12px;font-weight:600;

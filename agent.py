@@ -53,10 +53,27 @@ class VoiceAgent:
         self.conversation_active = False
         self.last_audio_time = time.time()
 
-        # Audio processing
+        # ── Outbound audio (AI → client) ──────────────────────────────────────
+        # Mirrors the reference agent pattern:
+        #   _pending_audio  — accumulates raw PCM from Gemini before flushing
+        #   _pending_sr     — sample rate reported by Gemini (usually 24 000 Hz)
+        #   _last_flush     — monotonic timestamp of last flush (for diagnostics)
+        #   _min_chunks_before_flush — wait for N chunks for smoother startup
+        #   _audio_chunk_count       — counts chunks received this turn
+        self._pending_audio = bytearray()
+        self._pending_sr = 24000
+        self._last_flush = time.monotonic()
+        self._audio_chunk_count = 0
+        self._min_chunks_before_flush = 3   # buffer 3 chunks before first flush
+
+        # ── Inbound audio (user → Gemini) ─────────────────────────────────────
         self.audio_buffer = []
         self.last_send_time = 0
         self.min_chunk_interval_ms = 200
+
+        # ── Recording streams (stereo WAV, 16 kHz) ────────────────────────────
+        self.ai_audio_stream = bytearray()    # AI PCM resampled to 16 kHz
+        self.user_audio_stream = bytearray()  # User PCM (already 16 kHz)
 
         # Conversation tracking
         self.conversation_history = []
@@ -262,18 +279,30 @@ class VoiceAgent:
             audio_data_out, sample_rate = self._decode_audio_output(message)
             if audio_data_out:
                 self._ai_is_speaking = True  # AI is outputting audio — block gender buffering
-                if self.response_callback:
-                    await self.response_callback({
-                        "type": "audio",
-                        "data": base64.b64encode(audio_data_out).decode(),
-                        "sample_rate": sample_rate,
-                        "format": "pcm16"
-                    })
+                self._audio_chunk_count += 1
+
+                # Keep recording stream at 16 kHz (matches user mic rate)
+                resampled = self._resample_audio(audio_data_out, from_rate=sample_rate, to_rate=16000)
+                self.ai_audio_stream.extend(resampled)
+                self.user_audio_stream.extend(b"\x00" * len(resampled))
+
+                # If sample rate changed mid-stream, flush pending before switching
+                if sample_rate != self._pending_sr and self._pending_audio:
+                    await self._maybe_flush_audio(force=True)
+                self._pending_sr = sample_rate
+                self._pending_audio.extend(audio_data_out)
+
+                # Buffer first N chunks for smoother startup, then stream through immediately
+                await self._maybe_flush_audio(force=False)
 
             # ── 5. Turn complete — flush AI buffer to history ──
             tc = server_content.get("turnComplete") or server_content.get("turn_complete")
             if tc:
                 self._ai_is_speaking = False  # AI finished — user audio may resume
+                # Flush any remaining buffered audio to client
+                await self._maybe_flush_audio(force=True)
+                # Reset chunk counter so next response gets the startup buffer again
+                self._audio_chunk_count = 0
                 full_ai_text = self._ai_turn_buf.strip()
                 self._ai_turn_buf = ""  # Reset buffer
 
@@ -457,9 +486,15 @@ class VoiceAgent:
                         )
                     )
 
+            # Buffer user audio in recording stream (AI side gets silence padding)
+            if self._is_speech(audio_data):
+                self.user_audio_stream.extend(audio_data)
+            else:
+                self.user_audio_stream.extend(b"\x00" * len(audio_data))
+
             current_time = time.time() * 1000
             if current_time - self.last_send_time >= self.min_chunk_interval_ms:
-                await self._flush_audio()
+                await self._flush_to_gemini()
 
         except Exception as e:
             logger.error(f"Error sending audio: {e}")
@@ -472,8 +507,8 @@ class VoiceAgent:
         rms = np.sqrt(np.mean(audio_np.astype(np.float32) ** 2))
         return rms > threshold
 
-    async def _flush_audio(self, force: bool = False):
-        """Send buffered audio chunks to Gemini."""
+    async def _flush_to_gemini(self, force: bool = False):
+        """Send buffered USER audio chunks upstream to Gemini."""
         if not self.audio_buffer:
             return
 
@@ -501,7 +536,82 @@ class VoiceAgent:
             self.last_send_time = time.time() * 1000
 
         except Exception as e:
-            logger.error(f"Error flushing audio: {e}")
+            logger.error(f"Error flushing audio to Gemini: {e}")
+
+    # ── Outbound audio to client ───────────────────────────────────────────────
+
+    async def _flush_audio(self):
+        """Send accumulated AI→client PCM immediately via response_callback."""
+        if not self._pending_audio or not self.response_callback or not self.conversation_active:
+            return
+        audio_base64 = base64.b64encode(bytes(self._pending_audio)).decode("utf-8")
+        try:
+            await self.response_callback({
+                "type": "audio",
+                "data": audio_base64,
+                "sample_rate": self._pending_sr,
+                "format": "pcm16",
+            })
+        except Exception as e:
+            logger.debug(f"Could not send audio chunk to client: {e}")
+            return
+        self._pending_audio.clear()
+        self._last_flush = time.monotonic()
+
+    async def _maybe_flush_audio(self, force: bool = False):
+        """
+        Stream AI audio to the client.
+
+        Mirrors the reference agent strategy:
+        - Hold back the first _min_chunks_before_flush chunks so the client
+          AudioWorklet has a small startup buffer (prevents underruns / choppy
+          start of each response).
+        - After that, flush every chunk immediately — the client is responsible
+          for smooth playback buffering from that point on.
+        - force=True bypasses the startup hold (used on sample-rate change or
+          turn-end cleanup).
+        """
+        if not self.response_callback or not self.conversation_active:
+            return
+        if not self._pending_audio:
+            return
+        if not force and self._audio_chunk_count < self._min_chunks_before_flush:
+            return  # still in startup buffer phase
+        await self._flush_audio()
+        self._last_flush = time.monotonic()
+
+    def _resample_audio(self, pcm_data: bytes, from_rate: int, to_rate: int) -> bytes:
+        """
+        Linear-interpolation resampler for 16-bit mono PCM.
+        Used to downsample AI audio (24 kHz) to 16 kHz for the recording stream.
+        Playback stream always uses the original sample rate.
+        """
+        if from_rate == to_rate:
+            return pcm_data
+        num_samples = len(pcm_data) // 2
+        ratio = from_rate / to_rate
+        resampled = bytearray()
+        for i in range(int(num_samples / ratio)):
+            fi = i * ratio
+            idx = int(fi)
+            if (idx + 1) * 2 > len(pcm_data):
+                break
+            s1 = int.from_bytes(pcm_data[idx*2:idx*2+2], "little", signed=True)
+            s2 = int.from_bytes(pcm_data[(idx+1)*2:(idx+1)*2+2], "little", signed=True)
+            frac = fi - idx
+            sample = int(s1 * (1 - frac) + s2 * frac)
+            resampled.extend(sample.to_bytes(2, "little", signed=True))
+        return bytes(resampled)
+
+    def _trim_silence(self, pcm_data: bytes, threshold: int = 500) -> bytes:
+        """Strip leading and trailing silence from a 16-bit mono PCM chunk."""
+        if not pcm_data:
+            return b""
+        audio_np = np.frombuffer(pcm_data, dtype=np.int16)
+        non_silent = np.where(np.abs(audio_np) > threshold)[0]
+        if len(non_silent) == 0:
+            return b""
+        return audio_np[non_silent[0]:non_silent[-1] + 1].tobytes()
 
     def _generate_wav_header(
         self,
@@ -665,7 +775,10 @@ class VoiceAgent:
         self.conversation_active = False
 
         try:
-            await self._flush_audio(force=True)
+            # Flush any buffered user audio upstream to Gemini
+            await self._flush_to_gemini(force=True)
+            # Flush any remaining AI audio to the client
+            await self._maybe_flush_audio(force=True)
 
             if self.receive_task:
                 self.receive_task.cancel()
