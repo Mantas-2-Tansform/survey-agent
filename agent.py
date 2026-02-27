@@ -348,7 +348,7 @@ class VoiceAgent:
                         logger.info("👋 Goodbye detected — scheduling call end after audio drain")
 
                         async def _delayed_survey_complete():
-                            await asyncio.sleep(3)  # allow client audio buffer to drain
+                            await asyncio.sleep(7)  # allow client audio buffer to drain
                             if self.response_callback:
                                 await self.response_callback({"type": "survey_complete"})
 
@@ -404,10 +404,7 @@ class VoiceAgent:
           Malayalam → പോകുന്നു / pokunnu
           Bengali   → আসছি / asche / aschi
           Gujarati  → આવજો / aavjo
-          Punjabi   → ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ / sat sri akal
-          Odia      → ଜୟ ଜଗନ୍ନାଥ / jai jagannath
-          Assamese  → বিদায় / biya / biday
-          Bhojpuri  → राम-राम / ram-ram
+          Urdu      → خدا حافظ / khuda hafiz
         """
         if not text:
             return False
