@@ -10,6 +10,7 @@ from websockets.asyncio.client import connect as ws_connect
 import google.auth
 from google.auth.transport.requests import Request as GoogleAuthRequest
 import numpy as np
+from noise_cancel import NoiseCanceller
 
 from config import GOODBYE_TRIGGERS
 
@@ -70,6 +71,7 @@ class VoiceAgent:
         self.audio_buffer = []
         self.last_send_time = 0
         self.min_chunk_interval_ms = 200
+        self.noise_canceller = NoiseCanceller(method="spectral_gate", aggressiveness=2)
 
         # ── Recording streams (stereo WAV, 16 kHz) ────────────────────────────
         self.ai_audio_stream = bytearray()    # AI PCM resampled to 16 kHz
@@ -482,6 +484,7 @@ class VoiceAgent:
 
         try:
             self.last_audio_time = time.time()
+            audio_data = self.noise_canceller.process(audio_data)
             self.audio_buffer.append(audio_data)
 
             # Gender detection: buffer ~3 seconds of actual user speech
