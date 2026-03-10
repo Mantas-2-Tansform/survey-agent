@@ -1,0 +1,2888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ABC Voice Collections — Worklet Playback</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; background: #0f172a; margin: 0; padding: 24px; color: #0b1220; }
+  .shell { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,.15); }
+  .title { font-weight: 700; font-size: 22px; margin-bottom: 6px; }
+  .sub { color: #5b667a; margin-bottom: 16px; }
+  .panel { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin: 14px 0; }
+  .row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; /* <-- allow left col to shrink */
+  gap: 12px;
+  align-items: center;
+}
+.row > select {
+  min-width: 0;    /* <-- let it shrink inside the 1fr column */
+  width: 100%;
+}
+/* ADD THESE STYLES FOR THE EDIT MODAL */
+.modal {
+  display: none; position: fixed; z-index: 100; left: 0; top: 0;
+  width: 100%; height: 100%; overflow: auto;
+  background-color: rgba(0,0,0,0.5);
+  animation: fadeIn 0.3s;
+}
+.modal-content {
+  background-color: #fefefe; margin: 15% auto; padding: 24px;
+  border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 12px;
+}
+.modal-content label { font-weight: 600; display: block; margin-bottom: 6px; }
+.modal-content input { width: calc(100% - 24px); margin-bottom: 12px; }
+.modal-buttons { text-align: right; margin-top: 16px; }
+@keyframes fadeIn { from {opacity: 0} to {opacity: 1} }
+
+
+
+  select, button, input { font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d9dee8; }
+  button.primary { background: #2563eb; color: #fff; border: none; }
+  button.warn { background: #ef4444; color: #fff; border: none; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .status { padding: 10px 12px; border-radius: 10px; font-weight: 600; }
+  .status.disconnected { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+  .status.connected { background:#ecfdf5; color:#065f46; border:1px solid #bbf7d0; }
+  .status.ready { background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; }
+  .conversation { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:14px; max-height:380px; overflow:auto; }
+  .msg { margin: 8px 0; padding: 10px 12px; border-radius: 10px; }
+  .msg.user { background:#e0f2fe; text-align:left; }
+  .msg.ai   { background:#f3e8ff; text-align:left; }
+  .msg.sys  { background:#f1f5f9; color:#334155; font-style: italic; }
+  .actions { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: pre-wrap; background:#0b1220; color:#e2e8f0; padding:10px; border-radius:10px; overflow:auto; max-height:120px; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; }
+  .micBtn { width:56px; height:56px; border-radius:50%; font-size:22px; border:none; background:#22c55e; color:#fff; }
+  .micBtn.live { background:#ef4444; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.06)} 100%{transform:scale(1)} }
+
+/* Add these new styles inside your <style> tag */
+#summaries-accordion summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px;
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  outline: none;
+}
+#summaries-accordion[open] summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+#summariesPanel {
+  max-height: 200px; /* Or any height you prefer */
+  overflow-y: auto;  /* This adds the vertical scrollbar when needed */
+}
+#summariesPanel ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+.summary-item {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 4px;
+}
+.summary-item:last-child {
+  border-bottom: none;
+}
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.summary-disposition {
+  font-weight: 600;
+  color: #1e3a8a;
+}
+.summary-date {
+  font-size: 12px;
+  color: #64748b;
+}
+.summary-body {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+}
+#summaries-accordion[open] {
+  background: #f8fafc; /* Same background as the conversation panel */
+  border: 1px solid #e5e7eb; /* Same border */
+  border-radius: 12px;
+  padding: 8px;
+} 
+
+.admin-controls button {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+.admin-controls button.edit { background-color: #f59e0b; color: white; border: none; }
+.admin-controls button.delete { background-color: #dc2626; color: white; border: none; }
+
+.edit-summary-modal textarea {
+  width: 95%;
+  height: 80px;
+  margin-bottom: 12px;
+}
+.details-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 16px;
+  align-items: center;
+}
+.detail-label {
+  color: #64748b;
+  font-weight: 500;
+}
+.detail-value {
+  font-weight: 600;
+}
+
+/* GENERALIZE the accordion styles */
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px;
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  outline: none;
+}
+details[open] {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 8px;
+}
+details[open] summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* Add these styles in your <style> tag */
+details summary:hover {
+  background-color: #e2e8f0;
+}
+
+details[open] > div {
+  border-left: 3px solid #2563eb;
+}
+
+.modal-content label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+  margin-top: 12px;
+}
+
+.modal-content label:first-child {
+  margin-top: 0;
+}
+
+.modal-content input[type="checkbox"] {
+  width: auto !important;
+  margin-right: 8px;
+}
+
+.modal-content textarea {
+  font-family: inherit;
+  font-size: inherit;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d9dee8;
+}
+.badge {
+  display:inline-block; padding:4px 8px; border-radius:999px;
+  font-weight:700; font-size:12px; border:1px solid #e5e7eb; background:#f1f5f9; color:#111827;
+}
+.badge.success { background:#ecfdf5; border-color:#bbf7d0; color:#065f46; }
+.badge.warn    { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+.badge.danger  { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+.badge.info    { background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a; }
+.outcome-grid {
+  display:grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin-top: 10px;
+}
+.outcome-label { color:#64748b; font-weight:500; }
+.outcome-value { font-weight:600; }
+
+/* --- QA Report Styles --- */
+.qa-modal { max-width: 800px; width: 90%; }
+.qa-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+.qa-score-badge { font-size: 24px; font-weight: 800; color: #2563eb; }
+.qa-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.qa-table th { text-align: left; padding: 10px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #64748b; }
+.qa-table td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+.qa-pass { color: #059669; font-weight: 700; background: #ecfdf5; padding: 4px 8px; border-radius: 6px; display: inline-block; }
+.qa-fail { color: #dc2626; font-weight: 700; background: #fef2f2; padding: 4px 8px; border-radius: 6px; display: inline-block; }
+.qa-evidence { font-style: italic; color: #475569; margin-top: 4px; font-size: 13px; }
+
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="title">🏛️ ABC Voice Collections</div>
+  <div class="sub">Playback via AudioWorklet (no decodeAudioData).</div>
+
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px;">
+      <div>
+        <div style="font-weight:600;margin-bottom:6px;">Passcode</div>
+        <input id="passcode" type="password" placeholder="Enter passcode…" />
+      </div>
+      <button id="login" class="primary">Unlock</button>
+      <button id="global-settings-btn" style="display:none; background-color: #059669; color: white; border: none;">Global Settings</button>
+    </div>
+    <div id="status" class="status disconnected">Locked.</div>
+  </div>
+
+  <div id="app" style="display:none;">
+    <div class="panel">
+      <div style="font-weight:600;margin-bottom:6px;">Select Customer</div>
+      <div class="row">
+        <select id="customer"></select>
+        <button id="edit" style="background-color: #f59e0b;" disabled>Edit</button>
+        <button id="connect" class="primary" disabled>Connect</button>
+      </div>
+      <div id="custInfo" class="panel" style="display:none;margin-top:12px;">
+          <div id="customerDetailsPanel"></div>
+
+          <div id="voice-gender-analysis" style="margin-top:12px; padding:10px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px;">
+              <div style="font-weight:700; color:#3730a3;">🎤 Real-Time Voice Gender</div>
+              <div id="gender-display" style="font-size:16px; font-weight:700; margin-top:4px;">Gender: </div>
+              <div id="confidence-display" style="font-size:12px; color:#475569;">Confidence: </div>
+          </div>
+          
+          <details id="transactions-accordion" style="margin-top: 16px;">
+              <summary>View Recent Transactions</summary>
+              <div id="transactionsPanel"></div>
+          </details>
+
+          <details id="summaries-accordion" style="margin-top: 16px;">
+              <summary>View Call Summaries</summary>
+              <div id="summariesPanel"></div>
+          </details>
+      </div>
+
+    <div class="panel">
+      <div class="controls">
+        <button id="mic" class="micBtn" title="Toggle microphone">🎤</button>
+        <button id="end" class="warn">End Call</button>
+        <button id="viewTranscript" style="display:none;">View Last Transcript</button>
+        <button id="viewQABtn" style="display:none; background-color: #7c3aed; color: white;">📋 View Quality Report</button>
+        <button id="playRecordingBtn" style="display:none;">Play Last Recording</button>
+        <button id="testTone">Test Speaker</button>
+      </div>
+      <div id="micState" style="margin-top:10px;color:#475569;font-weight:600;">Mic idle</div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:600;margin-bottom:6px;">Conversation</div>
+      <div id="conv" class="conversation"></div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:600;margin-bottom:6px;">Latest Agent Actions</div>
+      <div id="actions" class="actions">—</div>
+    </div>
+    <!-- Call Outcome (disposition code) -->
+    <div class="panel" id="outcomePanel" style="display:none;">
+      <div style="font-weight:600;margin-bottom:6px;">Call Outcome</div>
+      <div id="outcomeContent"></div>
+    </div>
+
+  </div>
+</div>
+
+
+<div id="global-settings-modal" class="modal">
+  <div class="modal-content" style="max-width: 500px;">
+    <div class="title">Global Settings</div>
+    <form id="global-settings-form">
+      <p style="font-size: 14px; color: #475569;">These settings apply to all customers by default.</p>
+      
+      <details open style="margin-bottom: 16px;">
+        <summary>Settlement Grid</summary>
+        <div style="padding: 12px;">
+          <label for="global-settlement-1-pct">Settlement 1 (% of Total)</label>
+          <input id="global-settlement-1-pct" type="number" min="0" max="100" step="0.1" required />
+          
+          <label for="global-settlement-2-pct">Settlement 2 (% of Principal)</label>
+          <input id="global-settlement-2-pct" type="number" min="0" max="100" step="0.1" required />
+          
+          <label for="global-settlement-3-pct">Settlement 3 (% of Principal)</label>
+          <input id="global-settlement-3-pct" type="number" min="0" max="100" step="0.1" required />
+        </div>
+      </details>
+      
+      <details open style="margin-bottom: 16px;">
+        <summary>Installment Plan</summary>
+        <div style="padding: 12px;">
+          <label for="global-installment-months">Default Installment Months</label>
+          <input id="global-installment-months" type="number" min="1" max="60" step="1" required />
+        </div>
+      </details>
+
+      <div class="modal-buttons">
+        <button type="button" id="cancel-global-settings">Cancel</button>
+        <button type="submit" class="primary">Save Global Settings</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Replace the existing edit-modal in voice_client.html with this enhanced version -->
+<div id="edit-modal" class="modal">
+  <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+    <div class="title">Edit Customer Details</div>
+
+    <!-- ADD THIS WRAPPER -->
+    <form id="edit-form">
+    
+    <details open style="margin-bottom: 16px;">
+      <summary>Basic Information</summary>
+      <div style="padding: 12px;">
+        <label for="edit-name">Name</label>
+        <input id="edit-name" type="text" required />
+        
+        <label for="edit-phone">Phone Number</label>
+        <input id="edit-phone" type="tel" />
+        
+        <label for="edit-alternate-phone">Alternate Phone</label>
+        <input id="edit-alternate-phone" type="tel" />
+        
+        <label for="edit-dob">Date of Birth</label>
+        <input id="edit-dob" type="date" />
+        
+        <label for="edit-gender">Gender</label>
+        <select id="edit-gender">
+          <option value="">Select...</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>Address & Location</summary>
+      <div style="padding: 12px;">
+        <label for="edit-address">Address</label>
+        <textarea id="edit-address" rows="3" style="width: calc(100% - 24px);"></textarea>
+        
+        <label for="edit-city">City</label>
+        <input id="edit-city" type="text" />
+        
+        <label for="edit-pincode">Pincode</label>
+        <input id="edit-pincode" type="text" pattern="[0-9]{6}" />
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>Account Information</summary>
+      <div style="padding: 12px;">
+        <label for="edit-account-status">Account Status</label>
+        <select id="edit-account-status">
+          <option value="active">Active</option>
+          <option value="pre_write_off">Pre Write-Off</option>
+          <option value="write_off">Write-Off</option>
+          <option value="settled">Settled</option>
+          <option value="closed">Closed</option>
+        </select>
+        
+        <label for="edit-delinquency-status">Delinquency Status</label>
+        <select id="edit-delinquency-status">
+          <option value="pre_delinquent">Pre-Delinquent</option>
+          <option value="delinquent">Delinquent</option>
+          <option value="past_due_pre_delinquent">Past Due Pre-Delinquent</option>
+        </select>
+        
+        <label for="edit-loan-type">Product Type</label>
+        <select id="edit-loan-type">
+          <option value="Personal_Loan">Personal Loan</option>
+          <option value="Credit_Card">Credit Card</option>
+          <option value="Home_Loan">Home Loan</option>
+          <option value="Auto_Loan">Auto Loan</option>
+        </select>
+        
+        <label for="edit-card-status">Card Status (if Credit Card)</label>
+        <select id="edit-card-status">
+          <option value="">N/A</option>
+          <option value="OPEN">Open</option>
+          <option value="CLOSED">Closed</option>
+          <option value="INACTIVE">Inactive</option>
+        </select>
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>Financial Details</summary>
+      <div style="padding: 12px;">
+        <label for="edit-debt">Amount Due</label>
+        <input id="edit-debt" type="number" step="0.01" required />
+        
+        <!-- REPLACE total outstanding with principal and interest fields -->
+        <label for="edit-principal-amount">Principal Amount</label>
+        <input id="edit-principal-amount" type="number" step="0.01" />
+        
+        <label for="edit-interest-charges">Interest & Charges</label>
+        <input id="edit-interest-charges" type="number" step="0.01" />
+        
+        <!-- Display calculated total outstanding (read-only) -->
+        <label for="edit-calculated-total">Calculated Total Outstanding</label>
+        <input id="edit-calculated-total" type="text" readonly style="background-color: #f1f5f9; color: #64748b;" />
+            
+
+        
+        <label for="edit-monthly-income">Monthly Income</label>
+        <input id="edit-monthly-income" type="number" step="1" />
+        
+        <label for="edit-cibil">CIBIL Score</label>
+        <input id="edit-cibil" type="number" min="300" max="900" />
+        
+        <label for="edit-installment-months">Installment Plan (Months)</label>
+        <input id="edit-installment-months" type="number" min="0" step="1" />
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>Important Dates</summary>
+      <div style="padding: 12px;">
+        <label for="edit-due-date">Payment Due Date</label>
+        <input id="edit-due-date" type="date" required />
+        
+        <label for="edit-billing-date">Next Billing Date</label>
+        <input id="edit-billing-date" type="date" />
+        
+        <label for="edit-customer-since">Customer Since</label>
+        <input id="edit-customer-since" type="date" />
+        
+        <label for="edit-loan-disbursement">Loan Disbursement Date</label>
+        <input id="edit-loan-disbursement" type="date" />
+        
+        <label for="edit-last-payment-date">Last Payment Date</label>
+        <input id="edit-last-payment-date" type="date" />
+        
+        <label for="edit-write-off-date">Write-Off Date</label>
+        <input id="edit-write-off-date" type="date" />
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>Verification & Preferences</summary>
+      <div style="padding: 12px;">
+        <label for="edit-pan">PAN Last 4 Characters</label>
+        <input id="edit-pan" type="text" pattern="[A-Z0-9]{4}" maxlength="4" style="text-transform: uppercase;" />
+        
+        <label for="edit-employment">Employment Status</label>
+        <select id="edit-employment">
+          <option value="employed">Employed</option>
+          <option value="unemployed">Unemployed</option>
+          <option value="self_employed">Self Employed</option>
+          <option value="retired">Retired</option>
+        </select>
+        
+        <label for="edit-communication">Communication Preference</label>
+        <select id="edit-communication">
+          <option value="all">All Channels</option>
+          <option value="sms_only">SMS Only</option>
+          <option value="email_only">Email Only</option>
+          <option value="no_calls">No Calls</option>
+        </select>
+        
+        <label for="edit-recovery-status">Recovery Status</label>
+        <select id="edit-recovery-status">
+          <option value="soft_recovery">Soft Recovery</option>
+          <option value="legal_notice">Legal Notice</option>
+          <option value="field_visit">Field Visit</option>
+          <option value="agency">Agency</option>
+        </select>
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>Status Tracking</summary>
+      <div style="padding: 12px;">
+        <label for="edit-days-overdue">Days Overdue</label>
+        <input id="edit-days-overdue" type="number" min="0" />
+        
+        <label for="edit-days-past-due">Days Past Due</label>
+        <input id="edit-days-past-due" type="number" min="0" />
+        
+        <label for="edit-last-payment-amount">Last Payment Amount</label>
+        <input id="edit-last-payment-amount" type="number" step="0.01" />
+        
+        <label for="edit-settlement-amount">Settlement Amount</label>
+        <input id="edit-settlement-amount" type="number" step="0.01" />
+        
+        <label>
+          <input id="edit-hardship-flag" type="checkbox" style="width: auto; margin-right: 8px;">
+          Hardship Flag
+        </label>
+        
+        <label>
+          <input id="edit-dispute-raised" type="checkbox" style="width: auto; margin-right: 8px;">
+          Dispute Raised
+        </label>
+        
+        <label for="edit-dispute-details">Dispute Details</label>
+        <textarea id="edit-dispute-details" rows="2" style="width: calc(100% - 24px);"></textarea>
+      </div>
+    </details>
+
+    <details style="margin-bottom: 16px;">
+      <summary>PTP History</summary>
+      <div style="padding: 12px;">
+        <div id="ptp-history-list" style="max-height: 200px; overflow-y: auto;">
+          <!-- Will be populated dynamically -->
+        </div>
+        <button type="button" class="primary" style="margin-top: 8px; font-size: 12px;" onclick="refreshPTPHistory()">
+          Refresh from Call Summaries
+        </button>
+      </div>
+    </details>
+
+    <div class="modal-buttons">
+      <button type="button" id="cancel-edit">Cancel</button>
+      <button type="submit"  class="primary">Save All Changes</button>
+    </div>
+    </form>
+  </div>
+</div>
+
+<div id="edit-summary-modal" class="modal">
+  <div class="modal-content edit-summary-modal">
+    <div class="title">Edit Call Summary</div>
+    <form id="edit-summary-form">
+      <input type="hidden" id="edit-summary-id">
+      
+      <label for="edit-summary-disposition">Disposition</label>
+      <input id="edit-summary-disposition" type="text" required />
+
+      <label for="edit-summary-text">Summary Text</label>
+      <textarea id="edit-summary-text" required></textarea>
+
+      <div class="modal-buttons">
+        <button type="button" id="cancel-summary-edit">Cancel</button>
+        <button type="submit" class="primary">Save Summary</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="edit-transaction-modal" class="modal">
+  <div class="modal-content">
+    <div class="title">Edit Transaction</div>
+    <form id="edit-transaction-form">
+      <input type="hidden" id="edit-transaction-id">
+      
+      <label for="edit-transaction-amount">Amount (INR)</label>
+      <input id="edit-transaction-amount" type="number" step="0.01" required />
+
+      <label for="edit-transaction-status">Status</label>
+      <select id="edit-transaction-status" required>
+        <option value="Success">Success</option>
+        <option value="Failure">Failure</option>
+        <option value="Pending">Pending</option>
+      </select>
+      
+      <label for="edit-transaction-type">Type (e.g., UPI, Card)</label>
+      <input id="edit-transaction-type" type="text" />
+
+      <label for="edit-transaction-channel">Channel (e.g., MobileApp)</label>
+      <input id="edit-transaction-channel" type="text" />
+
+      <label for="edit-transaction-bankName">Bank Name</label>
+      <input id="edit-transaction-bankName" type="text" />
+      
+      <label for="edit-transaction-upiTxnId">UPI Transaction ID</label>
+      <input id="edit-transaction-upiTxnId" type="text" />
+
+      <label for="edit-transaction-remarks">Remarks</label>
+      <input id="edit-transaction-remarks" type="text" required />
+      
+      <label for="edit-transaction-datetime">Date & Time</label>
+      <input id="edit-transaction-datetime" type="datetime-local" required />
+
+      <div class="modal-buttons">
+        <button type="button" id="cancel-transaction-edit">Cancel</button>
+        <button type="submit" class="primary">Save Transaction</button>
+      </div>
+    </form>
+  </div>
+</div>
+<div id="audio-player-modal" class="modal">
+  <div class="modal-content">
+    <div class="title">Call Recording</div>
+    <audio id="audio-player" controls style="width: 100%; margin-top: 16px;"></audio>
+    <div class="modal-buttons">
+      <button type="button" id="close-audio-player">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="call-rating-modal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="title">Rate Call Quality</div>
+        <p>Help us improve by rating your call with Customer <span id="rating-customer-name"></span>.</p>
+        <form id="call-rating-form">
+            <input type="hidden" id="rating-call-id">
+            <input type="hidden" id="rating-user-id">
+
+            <label style="margin-top: 10px;">Rating (1=Poor, 5=Excellent)</label>
+            <select id="rating-score" required style="width: 100%;">
+                <option value="5">5 - Excellent</option>
+                <option value="4">4 - Good</option>
+                <option value="3">3 - Fair</option>
+                <option value="2">2 - Poor</option>
+                <option value="1">1 - Very Poor</option>
+            </select>
+
+            <label for="rating-feedback">Feedback (Optional)</label>
+            <textarea id="rating-feedback" rows="3" style="width: calc(100% - 24px);"></textarea>
+
+            <div class="modal-buttons">
+                <button type="button" id="skip-rating-btn">Skip</button>
+                <button type="submit" class="primary">Submit Rating</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="qa-report-modal" class="modal">
+  <div class="modal-content qa-modal">
+    <div class="qa-header">
+      <div class="title">Call Quality Audit Report</div>
+      <div id="qa-total-score" class="qa-score-badge">--%</div>
+    </div>
+    <div style="max-height: 60vh; overflow-y: auto;">
+      <table class="qa-table">
+        <thead>
+          <tr>
+            <th style="width: 40%">Criteria</th>
+            <th style="width: 15%">Result</th>
+            <th>Evidence / Context</th>
+          </tr>
+        </thead>
+        <tbody id="qa-table-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-buttons">
+      <button type="button" id="close-qa-modal">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // document.addEventListener('DOMContentLoaded', () => {
+/** ======= CONFIG ======= */
+const BACKEND_URL = "http://localhost:8000";
+// const BACKEND_URL = "https://folder-transfer-v7-559077723478.us-central1.run.app";
+// const BACKEND_URL ="https://folder-transfer-v8-559077723478.us-central1.run.app"
+const SECRET_PASSCODE = "demo123";
+let lastTranscriptBlobName = null;
+
+/** ======= STATE ======= */
+let ws = null, selectedCustomer = null;
+let sr = null;
+let srActive = false;
+let callEnded = false;
+// A global variable to hold the customer list data
+let customerListData = []; 
+let lastUserMessageElement = null; 
+let isAiSpeaking = false;
+let aiSpeakTimer = null;
+const AI_SILENCE_TAIL_MS = 380; // hysteresis tail after last TTS chunk
+
+// === NEW: Robust audio playback tracking ===
+let aiAudioBufferEmpty = true;    // Track if audio buffer is empty
+let waitingForFirstAI = true;     // Block mic until first AI response completes
+let waitingForFirstAITimer = null;  // NEW: fallback timer
+let pendingTurnEnd = false;       // Server requested turn end but audio still playing
+// ===========================================
+// --- ADD THESE NEW GLOBAL STATE VARIABLES ---
+let currentUserId = null;     // Stores the ID received from /login
+let currentUserName = null;   // Stores the Name received from /login
+let currentCallId = null;     // Stores the unique ID generated by the agent for the current call
+// --------------------------------------------
+let isUserTurn = true;
+// -------------------------
+
+let bargeInTriggered = false;
+
+let lastEvaluationReport = null; 
+const viewQABtn = document.getElementById('viewQABtn');
+const qaModal = document.getElementById('qa-report-modal');
+const qaTableBody = document.getElementById('qa-table-body');
+const qaTotalScore = document.getElementById('qa-total-score');
+const closeQABtn = document.getElementById('close-qa-modal');
+
+// Add Listeners
+if(viewQABtn) viewQABtn.addEventListener('click', fetchAndShowQualityReport);
+if(closeQABtn) closeQABtn.addEventListener('click', () => qaModal.style.display = 'none');
+
+
+
+
+function openRatingModal(callId, customerName, userId) {
+    if (!callId || !userId) return;
+
+    $('#rating-call-id').value = callId;
+    $('#rating-user-id').value = userId;
+    $('#rating-customer-name').textContent = customerName;
+    
+    // Reset form fields
+    ratingForm.reset();
+    ratingModal.style.display = 'block';
+}
+
+function closeRatingModal() {
+    ratingModal.style.display = 'none';
+}
+
+async function handleSubmitRating(event) {
+    event.preventDefault();
+
+    const payload = {
+        call_id: $('#rating-call-id').value,
+        user_id: $('#rating-user-id').value,
+        rating: parseInt($('#rating-score').value, 10),
+        feedback: $('#rating-feedback').value || null,
+    };
+
+    try {
+        const response = await fetch(`${BACKEND_URL}/call-rating`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('Failed to submit rating.');
+        
+        console.log('Call rating submitted successfully.');
+        closeRatingModal();
+        alert('Thank you for your feedback! Rating submitted.');
+
+    } catch (error) {
+        console.error('Error submitting rating:', error);
+        alert(`Error saving rating: ${error.message}`);
+    }
+}
+
+
+
+function setMicGate(closed) {
+  isAiSpeaking = closed;
+  // reflect in UI
+  if (closed) {
+    micStateEl.textContent = '🎧 AI speaking — mic gated';
+  } else {
+    micStateEl.textContent = isStreaming ? '🔴 Mic live' : 'Mic idle';
+  }
+}
+
+function pauseLocalASR() {
+  // your startLocalASR() uses srActive to auto-restart onend; flip it off
+  if (srActive) {
+    srActive = false;
+    try { sr && sr.abort && sr.abort(); } catch {}
+  }
+}
+
+function resumeLocalASR() {
+  // only resume if mic is on and SR is instantiated
+  if (!isAiSpeaking && isStreaming && sr && !srActive) {
+    try { sr.start(); srActive = true; } catch {}
+  }
+}
+
+// === NEW: Complete turn after audio playback finishes ===
+function completeTurnAfterPlayback() {
+  console.log('✅ Audio playback complete, enabling mic');
+  
+  // NOW we can safely say AI is no longer speaking
+  isAiSpeaking = false;
+  
+  // Clear the first-AI-wait flag after first successful AI turn
+  if (waitingForFirstAI) {
+    waitingForFirstAI = false;
+    console.log('🎉 First AI turn complete, mic now allowed');
+  }
+  
+  // Now it's safe to open the mic
+  setMicGate(false);
+  bargeInTriggered = false;
+  resumeLocalASR();
+  
+  // Notify server that playback is complete
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'client_playback_complete' }));
+  }
+}
+// ======================================================
+
+
+
+let inputCtx = null, audioStream = null, scriptProcessor = null, isStreaming = false;
+
+let micAgg = [], micAggFrames = 0;
+const MIC_CHUNK_FRAMES = 4096;
+
+/** ======= DOM ======= */
+const $ = s => document.querySelector(s); // Define the helper function FIRST
+
+// Now, define the constants that use the helper function
+const statusEl = $('#status');
+const appEl = $('#app');
+const passcodeEl = $('#passcode');
+const loginBtn = $('#login');
+const customerEl = $('#customer');
+const connectBtn = $('#connect');
+const custInfoEl = $('#custInfo');
+const micBtn = $('#mic');
+const micStateEl = $('#micState');
+const endBtn = $('#end');
+const convEl = $('#conv');
+const actionsEl = $('#actions');
+const testBtn = $('#testTone');
+const viewTranscriptBtn = $('#viewTranscript'); // <-- This line should now work
+
+// --- Add a new DOM element selector for the user info ---
+const userInfoEl = $('#user-info-display'); // Selector for new status element
+// -----------------------------------------------------
+
+// START: NEW SELECTORS
+const globalSettingsBtn = $('#global-settings-btn');
+const globalSettingsModal = $('#global-settings-modal');
+const globalSettingsForm = $('#global-settings-form');
+const cancelGlobalSettingsBtn = $('#cancel-global-settings');
+// END: NEW SELECTORS
+if (viewTranscriptBtn) {
+    viewTranscriptBtn.addEventListener('click', () => fetchAndDisplayTranscript());
+    console.log("Check 2: Event listener for the transcript button has been attached.");
+} else {
+    console.error("ERROR: viewTranscriptBtn is null when trying to add event listener");
+}
+
+// Add new DOM selectors for rating modal
+const ratingModal = $('#call-rating-modal');
+const ratingForm = $('#call-rating-form');
+const skipRatingBtn = $('#skip-rating-btn');
+
+
+// Attach listeners for the rating modal
+ratingForm.addEventListener('submit', handleSubmitRating);
+skipRatingBtn.addEventListener('click', closeRatingModal);
+
+
+const playRecordingBtn = $('#playRecordingBtn');
+const audioPlayerModal = $('#audio-player-modal'); // <-- ADD THIS
+const audioPlayer = $('#audio-player');           // <-- ADD THIS
+const closeAudioPlayerBtn = $('#close-audio-player'); 
+console.log("Check 1: Is the transcript button element found?", viewTranscriptBtn); // <-- ADD THIS
+
+/** ======= UI HELPERS ======= */
+
+// === Scenario labels (add below UI HELPERS) ===
+const SCENARIO_EMOJI = {
+  pre_due_cc: '🟦 pre-due/CC',
+  overdue_cc: '🟥 overdue/CC',
+  broken_ptp: '⚠️ broken PTP',
+  repeat_nc: '🔁 repeat NC',
+  cb_recent: '📵 recent CB'
+};
+
+const idStr = v => String(v);
+
+
+function labelFor(c) {
+  // 1. Start with the base label, e.g., "Rajesh Kumar"
+  let label = c.name;
+
+  // 2. Build the product string, e.g., "• personal loan" or "• credit card /CC"
+  let product = (c.loan_type || 'N/A').replace(/_/g, ' ');
+  if (product.toLowerCase().includes('credit card')) {
+    product += ' /CC';
+  }
+  label += ` • ${product}`;
+
+  // 3. Build the status tag with color-coding
+  let statusTag = '';
+  if (c.delinquency_status) {
+    const status = c.delinquency_status.toLowerCase();
+    
+    // --- CORRECTED LOGIC ---
+    // We must check for the more specific "pre" case FIRST.
+    if (status.includes('pre')) {
+      statusTag = `— 🟦 ${status.replace(/_/g, ' ')}`;
+    } 
+    // This 'else if' will now only catch cases that are NOT "pre_delinquent".
+    else if (status.includes('delinquent') || status.includes('overdue')) {
+      statusTag = `— 🟥 ${status.replace(/_/g, ' ')}`;
+    }
+    // --- END OF CORRECTION ---
+  }
+  label += ` ${statusTag}`;
+
+  // 4. Add the reactivation tag for closed or inactive cards
+  if (c.card_status && (c.card_status === 'CLOSED' || c.card_status === 'INACTIVE')) {
+    label += ' | reactivation_candidate';
+  }
+  
+  return label;
+}
+// Disposition code dictionary (with alternates)
+const CODE_META = {
+  PP:  { label: "Promise to Pay",          desc: "Customer promised to pay on a specific date.", badge: "info", alts:["PTP"] },
+  ITP: { label: "Intention to Pay",        desc: "Intends to pay but cannot specify a date.",    badge: "info", alts:[] },
+  PAID:{ label: "Payment Made",            desc: "Payment made by the customer.",               badge: "success", alts:["PY"] },
+  CB:  { label: "Call Back",               desc: "Customer requested a callback.",              badge: "warn", alts:[] },
+  RNR: { label: "Ringing No Response",     desc: "Phone rang but wasn’t answered.",             badge: "warn", alts:["NA","NC"] },
+  SO:  { label: "Switched Off",            desc: "Customer’s phone is switched off.",           badge: "warn", alts:[] },
+  DND: { label: "Do Not Disturb",          desc: "Asked not to be contacted again.",            badge: "danger", alts:[] },
+  DIS: { label: "Dispute",                 desc: "Customer is disputing the amount or debt.",   badge: "danger", alts:[] },
+  INV: { label: "Invalid Number",          desc: "Number is incorrect or fake.",                badge: "danger", alts:[] },
+  NCF: { label: "Number Changed",          desc: "Number no longer belongs to customer.",       badge: "warn", alts:[] },
+  DEC: { label: "Deceased",                desc: "Account holder is deceased.",                 badge: "danger", alts:[] },
+  SET: { label: "Settled",                 desc: "Account has been fully settled.",             badge: "success", alts:[] },
+};
+
+// Normalize code to canonical key (handles alternates)
+function normalizeCode(code) {
+  if (!code) return null;
+  const up = String(code).trim().toUpperCase();
+  if (CODE_META[up]) return up;
+  for (const [k, v] of Object.entries(CODE_META)) {
+    if ((v.alts || []).includes(up)) return k;
+  }
+  return up; // unknown but show it
+}
+
+const outcomePanel   = document.getElementById('outcomePanel');
+const outcomeContent = document.getElementById('outcomeContent');
+
+function renderOutcome(outcome) {
+  // --- FIX: Filter low confidence ---
+  if (!outcome || !outcome.code || (outcome.confidence && outcome.confidence < 0.6)) {
+    // Don't show outcomes with less than 60% confidence
+    outcomePanel.style.display = 'none';
+    outcomeContent.innerHTML = '';
+    return;
+  }
+
+  const code = normalizeCode(outcome.code);
+  const meta = CODE_META[code] || {};
+  const badgeClass = meta.badge || 'info';
+  const confPct = outcome.confidence != null ? Math.round(Number(outcome.confidence) * 100) : null;
+
+  // Optional: flatten fields for display
+  const fields = outcome.fields || {};
+  const evidence = Array.isArray(outcome.evidence) ? outcome.evidence : [];
+
+  let html = `
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <span class="badge ${badgeClass}">${code}</span>
+      <span style="font-weight:700">${meta.label || code}</span>
+      ${confPct !== null ? `<span style="color:#64748b;">(confidence: ${confPct}%)</span>` : ``}
+    </div>
+    <div style="margin-top:6px; color:#475569;">${meta.desc || ''}</div>
+  `;
+
+  // Fields (e.g., promised_date, amount, callback_time…)
+  if (Object.keys(fields).length) {
+    html += `<div class="outcome-grid" style="margin-top:10px;">`;
+    for (const [k, v] of Object.entries(fields)) {
+      html += `<div class="outcome-label">${k.replace(/_/g,' ')}:</div><div class="outcome-value">${String(v)}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Evidence (snippets)
+  if (evidence.length) {
+    html += `<div style="margin-top:10px;">
+      <div class="outcome-label" style="margin-bottom:6px;">Evidence</div>
+      <ul style="margin:0; padding-left:18px; color:#475569;">${evidence.map(e => `<li>${e}</li>`).join('')}</ul>
+    </div>`;
+  }
+
+  outcomeContent.innerHTML = html;
+  outcomePanel.style.display = 'block';
+}
+
+
+
+function setStatus(kind, text){ statusEl.className=`status ${kind}`; statusEl.textContent=text; }
+function addMsg(kind, text){
+  console.log(`Attempting to add message -> Speaker: '${kind}', Text: "${text.substring(0, 40)}..."`); // <-- ADD THIS LINE
+
+  const d=document.createElement('div');
+  d.className=`msg ${kind}`;
+  const p = kind==='user'?'👤 You: ':kind==='ai'?'🤖 AI: ':'📞 ';
+  d.textContent=p+text;
+  convEl.appendChild(d); convEl.scrollTop=convEl.scrollHeight;
+}
+function showAction(obj){ actionsEl.textContent = JSON.stringify(obj,null,2); }
+
+/** ======= LOGIN ======= */
+// In your <script> tag...
+
+loginBtn.addEventListener('click', async () => {
+  const userPasscode = passcodeEl.value;
+  if (!userPasscode) {
+    alert('Please enter a passcode.');
+    return;
+  }
+
+  setStatus('connected', 'Authenticating…');
+  
+  try {
+    const response = await fetch(`${BACKEND_URL}/login`, { // <-- New endpoint
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode: userPasscode }) // Send the passcode
+    });
+
+    if (!response.ok) {
+      throw new Error('Invalid passcode.');
+    }
+
+    // Parse the JSON response from the backend
+    const loginResponse = await response.json();
+
+    // Store global user data upon successful login
+    currentUserId = loginResponse.user_id;
+    currentUserName = loginResponse.user_name;
+
+    // Now we proceed with loading the app.
+    
+    // If we get here, the backend confirmed the passcode is correct.
+    // Now we proceed with loading the app.
+    setStatus('connected', `Welcome, ${currentUserName}. Loading customers…`);
+    // setStatus('connected', 'Unlocked. Loading customers…');
+    appEl.style.display = 'block';
+    globalSettingsBtn.style.display = 'inline-block'; // <-- ADD THIS LINE
+
+    const r = await fetch(`${BACKEND_URL}/customers`);
+    const list = await r.json();
+    customerListData = list;
+    customerEl.innerHTML = '<option value="">Select…</option>';
+    for (const c of list) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = labelFor(c);
+      o.title = o.textContent;
+      customerEl.appendChild(o);
+    }
+    setStatus('connected', 'Choose a customer and connect.');
+
+  } catch (error) {
+    console.error('Login failed:', error);
+    setStatus('disconnected', `Login failed: ${error.message}`);
+    appEl.style.display = 'none'; // Re-hide the app on failure
+  }
+});
+
+// This is the single, correct event listener for the dropdown.
+// In your voice_client.html file, replace the existing function with this one
+
+
+// REPLACE your old customerEl.addEventListener with this new one:
+
+customerEl.addEventListener('change', async () => { // <-- Made this async
+    selectedCustomer = customerEl.value || null;
+    connectBtn.disabled = !selectedCustomer;
+    editBtn.disabled = !selectedCustomer;
+
+    // Clear all panels
+    customerDetailsPanel.innerHTML = '';
+    transactionsPanel.innerHTML = '';
+    summariesPanel.innerHTML = '';
+    custInfoEl.style.display = 'none';
+
+    if (selectedCustomer) {
+        // --- START: New Fetch Logic ---
+        // Show a loading state
+        custInfoEl.style.display = 'block';
+        customerDetailsPanel.innerHTML = '<p>Loading full customer details...</p>';
+
+        try {
+            // Fetch the FULL, detailed customer object from your backend
+            const response = await fetch(`${BACKEND_URL}/customer-details/${selectedCustomer}`);
+            const result = await response.json();
+            
+            if (result.status !== 'success') {
+                throw new Error(result.detail || 'Customer details not found.');
+            }
+            
+            const c = result.data.details; // This is the full customer object
+            const transactions = result.data.transactions || []; // Get transactions
+            // Now update the global list with this full data so "Edit" works
+            const customerIndex = customerListData.findIndex(cust => cust.id === selectedCustomer);
+            const sid = String(selectedCustomer);
+            const idx = customerListData.findIndex(x => String(x.id) === sid);
+
+            // force an id on the detailed object if backend omits it
+            const detailed = { ...c, id: c.id != null ? String(c.id) : sid };
+            // keep transactions if you want them on the object
+            if (Array.isArray(transactions)) detailed.transactions = transactions;
+
+            if (idx !== -1) {
+              // merge, and make sure id from the existing item wins
+              customerListData[idx] = {
+                ...customerListData[idx],
+                ...detailed,
+                id: String(customerListData[idx].id ?? sid),
+              };
+            } else {
+              customerListData.push(detailed);
+            }
+            // --- END: New Fetch Logic ---
+            
+            // --- This logic now uses the FULL 'c' object ---
+            const detailsPanel = document.getElementById('customerDetailsPanel');
+            const detailItems = [];
+
+            detailItems.push({ label: 'Name:', value: `<b>${c.name}</b>` });
+            if (c.phone_number) detailItems.push({ label: 'Phone:', value: c.phone_number });
+            
+            // ✅✅✅ THESE FIELDS WILL NOW BE POPULATED ✅✅✅
+            if (c.date_of_birth) detailItems.push({ label: 'DOB:', value: new Date(c.date_of_birth).toLocaleDateString('en-GB') });
+            if (c.pincode) detailItems.push({ label: 'PIN Code:', value: c.pincode });
+            if (c.last_payment_date) detailItems.push({ label: 'Last Payment:', value: new Date(c.last_payment_date).toLocaleDateString('en-GB') });
+            
+            
+            if (c.debt_amount) detailItems.push({ label: 'Amount Due:', value: `₹${c.debt_amount.toLocaleString('en-IN')}` });
+            if (c.principal_amount || c.interest_charges) {
+                const principal = c.principal_amount || 0;
+                const interest = c.interest_charges || 0;
+                const calculatedTotal = principal + interest;
+                
+                detailItems.push({ label: 'Principal:', value: `₹${principal.toLocaleString('en-IN')}` });
+                detailItems.push({ label: 'Interest & Charges:', value: `₹${interest.toLocaleString('en-IN')}` });
+                detailItems.push({ label: 'Total Outstanding:', value: `₹${calculatedTotal.toLocaleString('en-IN')}` });
+              } else if (c.total_outstanding_amount) {
+                // Fallback for existing data that still has total_outstanding_amount
+                detailItems.push({ label: 'Total Outstanding:', value: `₹${c.total_outstanding_amount.toLocaleString('en-IN')}` });
+              }
+            if (c.loan_last_4_digits) detailItems.push({ label: 'Account Ending:', value: c.loan_last_4_digits });
+            if (c.loan_type) detailItems.push({ label: 'Product Type:', value: c.loan_type.replace(/_/g, ' ') });
+            if (c.city) detailItems.push({ label: 'City:', value: c.city });
+            if (c.when_due) detailItems.push({ label: 'Payment Due:', value: new Date(c.when_due).toLocaleDateString('en-GB') });
+            if (c.next_billing_date) detailItems.push({ label: 'Next Billing:', value: new Date(c.next_billing_date).toLocaleDateString('en-GB') });
+
+            if (c.when_due) {
+                const today = new Date(); today.setHours(0,0,0,0);
+                const dueDate = new Date(c.when_due); dueDate.setHours(0,0,0,0);
+                const dayDiff = Math.round((dueDate - today) / (1000 * 3600 * 24));
+                let statusHtml = '';
+                if (dayDiff < 0) statusHtml = `<span style="color: #ef4444; font-weight: bold;">Overdue by ${Math.abs(dayDiff)} days</span>`;
+                else if (dayDiff === 0) statusHtml = `<span style="color: #f59e0b; font-weight: bold;">Due today</span>`;
+                else statusHtml = `<span style="color: #059669; font-weight: bold;">Due in ${dayDiff} days</span>`;
+                detailItems.push({ label: 'Status:', value: statusHtml });
+            }
+
+            let gridHtml = '<div class="details-grid">';
+            detailItems.forEach(item => {
+                gridHtml += `<div class="detail-label">${item.label}</div><div class="detail-value">${item.value}</div>`;
+            });
+            gridHtml += '</div>';
+            detailsPanel.innerHTML = gridHtml;
+
+            // --- Build Transactions Panel ---
+            const transactionsPanel = document.getElementById('transactionsPanel');
+            let headerHtml = `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px;">
+                <b style="font-size: 14px;">History</b>
+                <button id="add-transaction-btn" class="primary" style="font-size: 12px; padding: 6px 10px;">+ Add Transaction</button>
+              </div>
+            `;
+            if (transactions.length > 0) {
+                let transactionListHtml = '<ul>';
+                transactions.slice(0, 5).forEach(t => {
+                    const date = new Date(t.dateTime).toLocaleDateString('en-GB');
+                    const statusColor = t.status === 'Success' ? '#059669' : (t.status === 'Failure' ? '#ef4444' : '#f59e0b');
+                    transactionListHtml += `
+                      <li data-transaction-id="${t.transactionId}" class="summary-item">
+                        <div class="summary-header">
+                            <span>
+                                ${date}: ₹${t.amount.toLocaleString('en-IN')} via ${t.channel} 
+                                (<span style="font-weight: bold; color: ${statusColor};">${t.status}</span>)
+                            </span>
+                            <div class="admin-controls">
+                                <button class="edit" onclick="openTransactionEditModal('${t.transactionId}')">Edit</button>
+                                <button class="delete" onclick="deleteTransaction('${t.transactionId}')">Delete</button>
+                            </div>
+                        </div>
+                        <div class="summary-body"><i>${t.remarks}</i></div>
+                      </li>`;
+                });
+                transactionListHtml += '</ul>';
+                transactionsPanel.innerHTML = headerHtml + transactionListHtml;
+            } else {
+                transactionsPanel.innerHTML = headerHtml + '<p style="padding: 8px 4px; color: #64748b;">No recent transactions found.</p>';
+            }
+
+            // --- Fetch Summaries ---
+            fetchAndDisplaySummaries(selectedCustomer);
+
+        } catch (e) {
+            console.error('Failed to fetch customer details:', e);
+            detailsPanel.innerHTML = `<p style="color: #991b1b;">Error: ${e.message}</p>`;
+        }
+    }
+});
+
+/** ======= AUDIOWORKLET: PCM playout (no decode) ======= */
+let playbackCtx = null;
+let playoutNode = null;
+let workletReady = false;
+let useDecodeFallback = false;
+
+// old jitter buffer fallback pieces
+let decodeQueue = [];
+let nextChunkTime = 0;
+let queuedDuration = 0;
+
+function startLocalASR() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    console.warn('SpeechRecognition not supported in this browser.');
+    return;
+  }
+  if (srActive) return;
+
+  sr = new SR();
+  sr.continuous = true;
+  sr.interimResults = false; 
+  sr.lang = 'en-IN';
+
+  // This is the crucial part. This function is now empty and will not add a duplicate message.
+  sr.onresult = (ev) => {}; 
+
+  sr.onerror = (ev) => {
+    console.warn('SpeechRecognition error:', ev.error);
+  };
+  sr.onend = () => {
+    // This allows the recognition to auto-restart if it stops.
+    if (srActive) {
+      try { sr.start(); } catch {}
+    }
+  };
+
+  try { 
+    sr.start(); 
+    srActive = true; 
+  } catch (e) {
+    console.warn('SpeechRecognition start failed:', e);
+  }
+}
+
+function stopLocalASR() {
+  srActive = false;
+  if (sr) { try { sr.stop(); } catch {} }
+  sr = null;
+}
+
+async function fetchAndDisplaySummaries(customerId) {
+  const summariesPanel = document.getElementById('summariesPanel');
+  summariesPanel.innerHTML = ''; // Clear previous content
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/summaries/${customerId}`);
+    if (!response.ok) throw new Error('No summaries found.');
+    
+    const data = await response.json();
+    
+    if (data.status === 'success' && data.summaries.length > 0) {
+      let summaryHtml = '<ul>';
+      data.summaries.forEach(s => {
+        const date = new Date(s.call_start).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+
+        // NEW: compute code, badge, and friendly label
+        const code = s.disposition_code || s.disposition || 'N/A';
+        const norm = normalizeCode(code);
+        const meta = CODE_META[norm] || {};
+        const badge = `<span class="badge ${meta.badge || 'info'}" title="${meta.desc || ''}">${norm}</span>`;
+
+        summaryHtml += `
+          <li class="summary-item" data-summary-id="${s.summary_id}">
+            <div class="summary-header">
+              <span class="summary-disposition">${badge} ${meta.label || code}</span>
+              <div class="admin-controls">
+                  <span class="summary-date">${date}</span>
+                  <button class="edit" onclick="openSummaryEditModal('${s.summary_id}')">Edit</button>
+                  <button class="delete" onclick="deleteSummary('${s.summary_id}')">Delete</button>
+              </div>
+            </div>
+            <div class="summary-body">${s.summary_text || 'No summary text.'}</div>
+          </li>
+        `;
+      });
+
+      summaryHtml += '</ul>';
+      summariesPanel.innerHTML = summaryHtml;
+    } else {
+      summariesPanel.innerHTML = '<p style="padding: 8px 4px; color: #64748b;">No summaries found.</p>';
+    }
+  } catch (error) {
+    console.error('Error fetching summaries:', error);
+    summariesPanel.innerHTML = '<p style="padding: 8px 4px; color: #991b1b;">Error loading summaries.</p>';
+  }
+}
+
+// =================================================================
+// ===== NEW FUNCTION TO FETCH AND DISPLAY THE FINAL TRANSCRIPT ====
+// =================================================================
+// =================================================================
+// ===== REVISED FUNCTION TO FETCH AND DISPLAY THE TRANSCRIPT    ====
+// =================================================================
+async function fetchAndDisplayTranscript(blobName) { // It now accepts the blobName
+
+   // Use the stored blob name if none provided
+  if (!blobName) {
+        blobName = lastTranscriptBlobName;
+    }
+    
+  if (!blobName) {
+      addMsg('sys', 'No transcript path provided to fetch.');
+      return;
+  }
+
+  addMsg('sys', 'Fetching final transcript from server...');
+  viewTranscriptBtn.disabled = true;
+
+  try {
+    // It now calls the new, reliable endpoint
+    const response = await fetch(`${BACKEND_URL}/transcript?blob_name=${encodeURIComponent(blobName)}`);
+    
+    if (!response.ok) throw new Error(`Server returned status ${response.status}`);
+    
+    const data = await response.json();
+
+    convEl.innerHTML = ''; 
+    addMsg('sys', 'Final transcript loaded from archive.');
+
+    // --- THIS IS THE FIX ---
+    // The conversation array is inside data.transcript.conversation
+    const conversation = data.transcript?.conversation;
+
+    if (Array.isArray(conversation) && conversation.length > 0) {
+      for (const entry of conversation) {
+        if (entry.speaker && typeof entry.text !== 'undefined') {
+          addMsg(entry.speaker, entry.text);
+        }
+      }
+    } else {
+      addMsg('sys', 'No transcript data was found in the expected format.');
+    }
+    
+  } catch (error) {
+    console.error('Error fetching or parsing transcript:', error);
+    addMsg('sys', `Error displaying transcript: ${error.message}.`);
+  } finally {
+    viewTranscriptBtn.disabled = false;
+  }
+}
+
+
+async function ensurePlaybackCtx(){
+  if (!playbackCtx) playbackCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if (playbackCtx.state === 'suspended') await playbackCtx.resume();
+
+  if (workletReady || playoutNode) return;
+
+  try {
+    const workletCode = `
+      class PCMPlayout extends AudioWorkletProcessor {
+        constructor(){
+          super();
+          this.q = [];
+          this.read = 0;
+          this.queued = 0;
+          this.primed = false;
+          this.prime = Math.floor(sampleRate * 0.60);
+          this.lastReportedEmpty = true;  // Track last reported state
+          this.port.onmessage = (e) => {
+            const d=e.data;
+            if (d?.type==='push' && d.buf){ 
+              const f=new Float32Array(d.buf); 
+              this.q.push(f); 
+              this.queued+=f.length;
+              // Report buffer has audio
+              if (this.lastReportedEmpty) {
+                this.lastReportedEmpty = false;
+                this.port.postMessage({ type: 'buffer_state', empty: false, samples: this.queued });
+              }
+            }
+            else if (d?.type==='flush'){ 
+              this.q=[]; this.read=0; this.queued=0; this.primed=false;
+              this.lastReportedEmpty = true;
+              this.port.postMessage({ type: 'buffer_state', empty: true, samples: 0 });
+            }
+            else if (d?.type==='prime'){ this.prime = Math.max(0,Math.floor(sampleRate*(d.ms/1000))); }
+          };
+        }
+        _pull(){
+          if (!this.q.length) return 0;
+          let h=this.q[0];
+          if (this.read>=h.length){ this.q.shift(); this.read=0; if(!this.q.length) return 0; h=this.q[0]; }
+          const s=h[this.read++]; this.queued--; return s;
+        }
+        process(i,o){
+          const out=o[0][0];
+          if (!this.primed){
+            if (this.queued >= this.prime) this.primed=true;
+            out.fill(0); return true;
+          }
+          for (let n=0;n<out.length;n++) out[n]=this._pull();
+          
+          // Report when buffer becomes empty
+          if (this.queued === 0 && !this.lastReportedEmpty) {
+            this.lastReportedEmpty = true;
+            this.port.postMessage({ type: 'buffer_state', empty: true, samples: 0 });
+          }
+          return true;
+        }
+      }
+      registerProcessor('pcm-playout', PCMPlayout);
+    `;
+    const url = URL.createObjectURL(new Blob([workletCode], {type:'text/javascript'}));
+    await playbackCtx.audioWorklet.addModule(url);
+    playoutNode = new AudioWorkletNode(playbackCtx, 'pcm-playout');
+    
+    // === NEW: Handle buffer state messages from worklet ===
+    playoutNode.port.onmessage = (e) => {
+      if (e.data.type === 'buffer_state') {
+        aiAudioBufferEmpty = e.data.empty;
+        // console.log(\`🔊 Audio buffer: \${e.data.empty ? 'EMPTY' : 'PLAYING'}, samples: \${e.data.samples}\`);
+        
+        // If server requested turn end and buffer is now empty, complete the turn
+        if (pendingTurnEnd && aiAudioBufferEmpty) {
+          pendingTurnEnd = false;
+          completeTurnAfterPlayback();
+        }
+      }
+    };
+    // =====================================================
+    
+    playoutNode.connect(playbackCtx.destination);
+    playoutNode.port.postMessage({type:'prime', ms: 300});
+    workletReady = true;
+  } catch (err) {
+    console.warn('AudioWorklet unavailable; using decode fallback.', err);
+    useDecodeFallback = true;   // IMPORTANT: don’t throw
+  }
+}
+
+
+function base64ToBytes(b64){ const bin=atob(b64); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+function float32ToPCM16(f32){ const out=new Int16Array(f32.length); for(let i=0;i<f32.length;i++){ let s=Math.max(-1,Math.min(1,f32[i])); out[i]= s<0 ? s*32768 : s*32767; } return out; }
+
+// simple linear resampler to device rate for worklet path
+function resamplePCM16ToF32(int16, srcRate, dstRate){
+  if (srcRate===dstRate){ const f=new Float32Array(int16.length); for(let i=0;i<int16.length;i++) f[i]=int16[i]/32768; return f; }
+  const ratio = srcRate/dstRate, outLen = Math.floor(int16.length/ratio);
+  const out = new Float32Array(outLen); let pos=0;
+  for (let i=0;i<outLen;i++){ const idx=pos|0, frac=pos-idx, s0=int16[idx]||0, s1=int16[idx+1]||s0; out[i]=((s0*(1-frac)+s1*frac)/32768); pos+=ratio; }
+  return out;
+}
+
+function wavHeader(byteLen, rate, ch){
+  const b=new ArrayBuffer(44), v=new DataView(b);
+  const w=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4,36+byteLen,true); w(8,'WAVE'); w(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,ch,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*ch*2,true);
+  v.setUint16(32,ch*2,true); v.setUint16(34,16,true); w(36,'data');
+  v.setUint32(40,byteLen,true); return new Uint8Array(b);
+}
+
+function feedAudioFromServer(b64, srcRate){
+  try {
+    if (!b64) {
+      console.error('❌ feedAudioFromServer: No base64 data');
+      return;
+    }
+    console.log(`🎵 feedAudioFromServer: Processing ${b64.length} chars at ${srcRate}Hz`);
+    
+    if (workletReady && playoutNode) {
+      const bytes = base64ToBytes(b64);
+      const frames = Math.floor(bytes.byteLength/2);
+      const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, frames);
+      const f32 = resamplePCM16ToF32(int16, srcRate, playbackCtx.sampleRate);
+      playoutNode.port.postMessage({type:'push', buf:f32.buffer}, [f32.buffer]);
+      return;
+    }
+
+    // Fallback: WAV + decodeAudioData with scheduler
+    const bytes = base64ToBytes(b64);
+    const wav = new Uint8Array(wavHeader(bytes.length, srcRate, 1).length + bytes.length);
+    wav.set(wavHeader(bytes.length, srcRate, 1), 0); wav.set(bytes, 44);
+    playbackCtx.decodeAudioData(
+      wav.buffer,
+      (buf) => {
+        if (nextChunkTime < playbackCtx.currentTime) nextChunkTime = playbackCtx.currentTime;
+        const src = playbackCtx.createBufferSource();
+        src.buffer = buf; src.connect(playbackCtx.destination);
+        src.start(nextChunkTime); nextChunkTime += buf.duration;
+      },
+      (err) => console.error('❌ decodeAudioData error:', err)
+    );
+  } catch (e) {
+    console.error('❌ feedAudioFromServer EXCEPTION:', e);
+  }
+}
+function base64ToBytes(b64){
+  try {
+    const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+    for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  } catch (e) {
+    console.error('❌ base64ToBytes FAILED:', e, 'Input length:', b64?.length);
+    return new Uint8Array(0);
+  }
+}
+function pushToPlayout(b64, srcRate){
+  if (!playbackCtx || !playoutNode) return;
+  const bytes = base64ToBytes(b64);
+  // bytes might not be aligned; ensure Int16 view length is even
+  const frames = Math.floor(bytes.byteLength / 2);
+  const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, frames);
+  const f32 = resamplePCM16ToF32(int16, srcRate, playbackCtx.sampleRate);
+  // transfer the underlying ArrayBuffer for zero-copy into the worklet
+  playoutNode.port.postMessage({type:'push', buf:f32.buffer}, [f32.buffer]);
+}
+
+/** ======= EDIT CUSTOMER LOGIC ======= */
+
+// Add new DOM selectors
+const editBtn = $('#edit');
+const editModal = $('#edit-modal');
+const editForm = $('#edit-form');
+const cancelEditBtn = $('#cancel-edit');
+
+// Show the modal and populate it with the customer's current data
+// REPLACE your old 'openEditModal' function with this new one:
+
+async function openEditModal() { // <-- Made this async
+    if (!selectedCustomer) return;
+    
+    let customer = customerListData.find(c => c.id === selectedCustomer);
+
+    // --- START: New Fetch Logic ---
+    // Check if the data we have is incomplete (e.g., missing DOB)
+    // If it is, fetch the full details first.
+    if (!customer || !customer.date_of_birth) { 
+        try {
+            console.log("Edit modal: Fetching full customer details...");
+            const response = await fetch(`${BACKEND_URL}/customer-details/${selectedCustomer}`);
+            const result = await response.json();
+            if (result.status !== 'success') throw new Error('Could not fetch details');
+            customer = result.data.details; // Get the full customer object
+            
+            // Update the global list so we don't have to fetch again
+            const customerIndex = customerListData.findIndex(cust => cust.id === selectedCustomer);
+            if (customerIndex !== -1) customerListData[customerIndex] = customer;
+
+        } catch (e) {
+            alert('Could not load full customer data to edit. Please try again.');
+            return;
+        }
+    }
+    // --- END: New Fetch Logic ---
+
+    // Now 'customer' is guaranteed to be the full, detailed object
+    
+    // Basic Information
+    $('#edit-name').value = customer.name || '';
+    $('#edit-phone').value = customer.phone_number || '';
+    $('#edit-alternate-phone').value = customer.alternate_phone || '';
+    $('#edit-dob').value = customer.date_of_birth ? customer.date_of_birth.split('T')[0] : '';
+    $('#edit-gender').value = customer.gender || '';
+    
+    // Address & Location
+    $('#edit-address').value = customer.address || '';
+    $('#edit-city').value = customer.city || '';
+    $('#edit-pincode').value = customer.pincode || '';
+    
+    // Account Information
+    $('#edit-account-status').value = customer.account_status || 'active';
+    $('#edit-delinquency-status').value = customer.delinquency_status || 'pre_delinquent';
+    $('#edit-loan-type').value = customer.loan_type || 'Personal_Loan';
+    $('#edit-card-status').value = customer.card_status || '';
+    
+    // Financial Details
+    $('#edit-debt').value = customer.debt_amount || 0;
+   // NEW: Principal and Interest fields
+    $('#edit-principal-amount').value = customer.principal_amount || '';
+    $('#edit-interest-charges').value = customer.interest_charges || '';
+    
+    // Calculate and display total outstanding
+    updateCalculatedTotal();
+    // $('#edit-original-loan').value = customer.original_loan_amount || 0;
+    $('#edit-monthly-income').value = customer.monthly_income || 0;
+    $('#edit-cibil').value = customer.cibil_score || 650;
+    
+    $('#edit-installment-months').value = customer.installment_months || 4;
+    
+    // Important Dates
+    $('#edit-due-date').value = customer.when_due ? customer.when_due.split('T')[0] : '';
+    $('#edit-billing-date').value = customer.next_billing_date ? customer.next_billing_date.split('T')[0] : '';
+    $('#edit-customer-since').value = customer.customer_since ? customer.customer_since.split('T')[0] : '';
+    $('#edit-loan-disbursement').value = customer.loan_disbursement_date ? customer.loan_disbursement_date.split('T')[0] : '';
+    $('#edit-last-payment-date').value = customer.last_payment_date ? customer.last_payment_date.split('T')[0] : '';
+    $('#edit-write-off-date').value = customer.write_off_date ? customer.write_off_date.split('T')[0] : '';
+    
+    // Verification & Preferences
+    $('#edit-pan').value = customer.pan_last_4 || '';
+    $('#edit-employment').value = customer.employment_status || 'employed';
+    $('#edit-communication').value = customer.communication_preference || 'all';
+    $('#edit-recovery-status').value = customer.recovery_status || 'soft_recovery';
+    
+    // Status Tracking
+    $('#edit-days-overdue').value = customer.days_overdue || 0;
+    $('#edit-days-past-due').value = customer.days_past_due || 0;
+    $('#edit-last-payment-amount').value = customer.last_payment_amount || 0;
+    $('#edit-settlement-amount').value = customer.settlement_amount || '';
+    $('#edit-hardship-flag').checked = customer.hardship_flag || false;
+    $('#edit-dispute-raised').checked = customer.dispute_raised || false;
+    $('#edit-dispute-details').value = customer.dispute_details || '';
+    
+    // Load PTP History
+    loadPTPHistory(customer);
+    
+    editModal.style.display = 'block';
+}
+
+async function handleUpdateCustomer(event) {
+  event.preventDefault();
+  if (!selectedCustomer) return;
+
+  const sid = String(selectedCustomer);
+  console.log("🔍 Selected Customer ID:", sid, "(type:", typeof sid, ")");
+
+  // ======= Deep diagnostics on your list =======
+  console.log("📋 customerListData (raw):", customerListData);
+
+  // Table for quick visual scan
+  try {
+    console.table(
+      customerListData.map((c, i) => ({
+        i,
+        id: c?.id,
+        typeof_id: typeof c?.id,
+        has_id: !!c?.id,
+        name: c?.name,
+      }))
+    );
+  } catch (_) {}
+
+  // Log any items that are missing id
+  const missingId = customerListData
+    .map((c, i) => (!c?.id ? i : null))
+    .filter(i => i !== null);
+  if (missingId.length) {
+    console.warn("⚠️ Items missing `id` at indexes:", missingId);
+  }
+
+  // Try to find by normalized id
+  const foundIndex = customerListData.findIndex(c => String(c?.id) === sid);
+  console.log("🔎 Found index by id:", foundIndex);
+
+  const originalCustomer = foundIndex !== -1 ? customerListData[foundIndex] : null;
+
+  if (!originalCustomer) {
+    console.error("❌ No original customer found for", sid);
+    // Optional fallback: try by name from the form (in case id got dropped)
+    const formName = $('#edit-name')?.value;
+    if (formName) {
+      const altIdx = customerListData.findIndex(c => c?.name === formName);
+      console.warn("🧲 Fallback by name match index:", altIdx, "name:", formName);
+      if (altIdx !== -1) {
+        console.warn("➡️ Using fallback customer (by name).");
+        // Rehydrate its id if missing
+        if (!customerListData[altIdx].id) {
+          customerListData[altIdx].id = sid;
+          console.warn("🩹 Rehydrated missing id on fallback item with", sid);
+        }
+        return handleUpdateCustomer(event); // retry with fixed data
+      }
+    }
+    alert('Error: Original customer data not found.');
+    return;
+  }
+
+  console.log("✅ originalCustomer:", originalCustomer);
+
+  // Helpers to avoid NaN
+  const intOr = (v, fallback) => Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : fallback;
+  const floatOr = (v, fallback) => Number.isFinite(parseFloat(v)) ? parseFloat(v) : fallback;
+
+  // Build payload; DO NOT spread originalCustomer to avoid including deprecated fields
+  const updatedCustomerData = {
+    // Basic Information
+    name: $('#edit-name').value,
+    phone_number: $('#edit-phone').value,
+    alternate_phone: $('#edit-alternate-phone').value || null,
+    date_of_birth: $('#edit-dob').value || null,
+    gender: $('#edit-gender').value || null,
+    // Address & Location
+    address: $('#edit-address').value || null,
+    city: $('#edit-city').value,
+    pincode: $('#edit-pincode').value || null,
+    // Account Information
+    account_status: $('#edit-account-status').value,
+    delinquency_status: $('#edit-delinquency-status').value,
+    loan_type: $('#edit-loan-type').value,
+    card_status: $('#edit-card-status').value || null,
+    // Financial Details
+    debt_amount: floatOr($('#edit-debt').value, 0),
+    // NEW: Principal and Interest fields (REPLACE total_outstanding_amount)
+    principal_amount: floatOr($('#edit-principal-amount').value, null),
+    interest_charges: floatOr($('#edit-interest-charges').value, null),
+    monthly_income: intOr($('#edit-monthly-income').value, null),
+    cibil_score: intOr($('#edit-cibil').value, 650),
+    
+    installment_months: intOr($('#edit-installment-months').value, 4),
+    
+    // Important Dates
+    when_due: $('#edit-due-date').value,
+    next_billing_date: $('#edit-billing-date').value || null,
+    customer_since: $('#edit-customer-since').value || null,
+    loan_disbursement_date: $('#edit-loan-disbursement').value || null,
+    last_payment_date: $('#edit-last-payment-date').value || null,
+    write_off_date: $('#edit-write-off-date').value || null,
+    // Verification & Preferences
+    pan_last_4: $('#edit-pan').value || null,
+    employment_status: $('#edit-employment').value,
+    communication_preference: $('#edit-communication').value,
+    recovery_status: $('#edit-recovery-status').value,
+    // Status Tracking
+    days_overdue: intOr($('#edit-days-overdue').value, 0),
+    days_past_due: intOr($('#edit-days-past-due').value, 0),
+    last_payment_amount: floatOr($('#edit-last-payment-amount').value, 0),
+    settlement_amount: floatOr($('#edit-settlement-amount').value, null),
+    hardship_flag: $('#edit-hardship-flag').checked,
+    dispute_raised: $('#edit-dispute-raised').checked,
+    dispute_details: $('#edit-dispute-details').value || null,
+  };
+
+  console.log("📦 Payload to PUT:", updatedCustomerData);
+
+  const payload = { ...updatedCustomerData };
+  if ('total_outstanding_amount' in payload) {
+    delete payload.total_outstanding_amount;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/customers/${sid}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("🛑 Backend error response:", errorData);
+      throw new Error(errorData.detail || 'Failed to save changes.');
+    }
+
+    console.log("✅ PUT ok. Refreshing list…");
+    alert('Customer updated successfully!');
+    closeEditModal();
+    await refreshCustomerList();
+
+  } catch (error) {
+    console.error('❌ Error updating customer:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+/** ======= FINANCIAL VALIDATION ======= */
+function validateFinancialFields() {
+  const principal = parseFloat($('#edit-principal-amount').value) || 0;
+  const interest = parseFloat($('#edit-interest-charges').value) || 0;
+  const debt = parseFloat($('#edit-debt').value) || 0;
+  const total = principal + interest;
+  
+  // Basic validation
+  if (principal < 0 || interest < 0) {
+    alert('Principal amount and interest charges cannot be negative.');
+    return false;
+  }
+  
+  if (debt > total && total > 0) {
+    if (!confirm('Minimum amount due is greater than total outstanding. Is this correct?')) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+// Update the form submission to include validation
+if (editForm) {
+  editForm.addEventListener('submit', (event) => {
+    if (!validateFinancialFields()) {
+      event.preventDefault();
+      return;
+    }
+    handleUpdateCustomer(event);
+  });
+}
+
+// Add new functions for PTP History
+function loadPTPHistory(customer) {
+  const ptpList = $('#ptp-history-list');
+  ptpList.innerHTML = '<p style="color: #64748b;">Loading PTP history...</p>';
+  
+  // Fetch summaries and extract PTP commitments
+  fetch(`${BACKEND_URL}/summaries/${customer.id}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success' && data.summaries) {
+        const ptpEntries = [];
+        
+        data.summaries.forEach(summary => {
+          // Check if disposition indicates PTP
+          if (summary.disposition && summary.disposition.toLowerCase().includes('ptp')) {
+            ptpEntries.push({
+              date: new Date(summary.call_start).toLocaleDateString('en-GB'),
+              disposition: summary.disposition,
+              summary: summary.summary_text || 'No details',
+              amount: extractAmountFromSummary(summary.summary_text),
+              promised_date: extractPromisedDate(summary.summary_text)
+            });
+          }
+          
+          // Also check actions_log for PTP commitments
+          if (summary.actions_log) {
+            summary.actions_log.forEach(log => {
+              if (log.action && log.action.disposition && 
+                  log.action.disposition.toLowerCase().includes('ptp')) {
+                ptpEntries.push({
+                  date: new Date(log.timestamp || summary.call_start).toLocaleDateString('en-GB'),
+                  disposition: log.action.disposition,
+                  amount: log.action.ptp_amount || 'N/A',
+                  promised_date: log.action.ptp_date || 'N/A'
+                });
+              }
+            });
+          }
+        });
+        
+        if (ptpEntries.length > 0) {
+          let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
+          ptpEntries.forEach(ptp => {
+            html += `
+              <li style="border-bottom: 1px solid #e5e7eb; padding: 8px 0;">
+                <div style="font-weight: 600; color: #1e3a8a;">${ptp.date}: ${ptp.disposition}</div>
+                <div style="font-size: 13px; color: #64748b;">
+                  Amount: ₹${ptp.amount} | Promise Date: ${ptp.promised_date}
+                </div>
+              </li>
+            `;
+          });
+          html += '</ul>';
+          ptpList.innerHTML = html;
+        } else {
+          ptpList.innerHTML = '<p style="color: #64748b;">No PTP history found in call summaries.</p>';
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Error loading PTP history:', error);
+      ptpList.innerHTML = '<p style="color: #991b1b;">Error loading PTP history.</p>';
+    });
+}
+
+function extractAmountFromSummary(text) {
+  if (!text) return 'N/A';
+  const match = text.match(/₹?([\d,]+)/);
+  return match ? match[1] : 'N/A';
+}
+
+function extractPromisedDate(text) {
+  if (!text) return 'N/A';
+  // Look for common date patterns in summary text
+  const patterns = [
+    /by (\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
+    /on (\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
+    /promised.*?(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
+    /commit.*?(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i
+  ];
+  
+  for (let pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
+  }
+  return 'N/A';
+}
+
+function refreshPTPHistory() {
+  const customer = customerListData.find(c => c.id === selectedCustomer);
+  if (customer) {
+    loadPTPHistory(customer);
+  }
+}
+
+// Hide the modal
+function closeEditModal() {
+  editModal.style.display = 'none';
+}
+
+
+
+// Helper function to reload the customer list from the server
+// In voice_client.html, replace the entire function
+
+async function refreshCustomerList() {
+    setStatus('connected','Refreshing customer list…');
+    try {
+        const r = await fetch(`${BACKEND_URL}/customers`);
+        const list = await r.json();
+        customerListData = list; // Update our global state
+        const previouslySelected = customerEl.value;
+        
+        customerEl.innerHTML = '<option value="">Select…</option>';
+        for (const c of list) {
+            const o = document.createElement('option');
+            o.value = c.id;
+            // --- THIS IS THE FIX ---
+            o.textContent = labelFor(c); // Use the detailed label function here
+            o.title = o.textContent;
+            // --------------------
+            customerEl.appendChild(o);
+        }
+        
+        customerEl.value = previouslySelected; // Re-select the same customer
+        customerEl.dispatchEvent(new Event('change')); // Trigger change to update info panel
+        setStatus('connected','Choose a customer and connect.');
+    } catch(e){ 
+        console.error(e); 
+        setStatus('disconnected','Failed to refresh customers.'); 
+    }
+}
+
+// Attach the event listeners for the new components
+editBtn.addEventListener('click', openEditModal);
+
+/** ======= GLOBAL SETTINGS MODAL LOGIC ======= */
+
+async function openGlobalSettingsModal() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/settings`);
+    if (!response.ok) throw new Error('Could not load settings.');
+    
+    const settings = await response.json();
+    
+    $('#global-settlement-1-pct').value = settings.settlement_grid_option_1_percent || 80.0;
+    $('#global-settlement-2-pct').value = settings.settlement_grid_option_2_percent || 100.0;
+    $('#global-settlement-3-pct').value = settings.settlement_grid_option_3_percent || 80.0;
+    $('#global-installment-months').value = settings.installment_months || 4;
+    
+    globalSettingsModal.style.display = 'block';
+    
+  } catch (error) {
+    console.error('Error fetching global settings:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+function closeGlobalSettingsModal() {
+  globalSettingsModal.style.display = 'none';
+}
+
+async function handleUpdateGlobalSettings(event) {
+  event.preventDefault();
+  
+  const payload = {
+    settlement_grid_option_1_percent: parseFloat($('#global-settlement-1-pct').value),
+    settlement_grid_option_2_percent: parseFloat($('#global-settlement-2-pct').value),
+    settlement_grid_option_3_percent: parseFloat($('#global-settlement-3-pct').value),
+    installment_months: parseInt($('#global-installment-months').value, 10),
+  };
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error('Failed to save settings.');
+    
+    alert('Global settings updated successfully!');
+    closeGlobalSettingsModal();
+    
+  } catch (error) {
+    console.error('Error updating global settings:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+globalSettingsBtn.addEventListener('click', openGlobalSettingsModal);
+cancelGlobalSettingsBtn.addEventListener('click', closeGlobalSettingsModal);
+globalSettingsForm.addEventListener('submit', handleUpdateGlobalSettings);
+cancelEditBtn.addEventListener('click', closeEditModal);
+if (editForm) {
+  editForm.addEventListener('submit', handleUpdateCustomer);
+}
+
+function resetGenderPanel() {
+  const genderEl = document.getElementById('gender-display');
+  const confidenceEl = document.getElementById('confidence-display');
+  const analysisPanel = document.getElementById('voice-gender-analysis');
+
+  if (genderEl) genderEl.textContent = 'Gender: —';
+  if (confidenceEl) confidenceEl.textContent = 'Confidence: —';
+  if (analysisPanel) analysisPanel.style.borderColor = '#e5e7eb'; // neutral border
+}
+
+
+
+
+/** ======= CONNECT ======= */
+connectBtn.addEventListener('click', () => {
+  if (!selectedCustomer) return;
+
+  (async () => {
+
+    // if (!currentUserId) {
+    //     alert('Authentication required. Please log in first.');
+    //     return;
+    // }
+
+    viewTranscriptBtn.style.display = 'none'; // Hide transcript button on new connection
+    convEl.innerHTML = ''; // Clear previous conversation/transcript
+    actionsEl.textContent = '—'; // Reset actions
+    callEnded = false; // Reset call ended flag
+    // 👇 ADD THIS
+    resetGenderPanel();
+    // 1) Try to init playback, but DO NOT block if it fails
+    try {
+      await ensurePlaybackCtx();   // your non-throwing version is ideal
+    } catch (e) {
+      console.warn('Playback init failed, continuing with fallback', e);
+      // (if you use a flag, set it here: useDecodeFallback = true)
+    }
+
+    // 2) Reset playout buffer if the worklet exists
+    if (playoutNode) playoutNode.port.postMessage({ type: 'flush' });
+
+    // 3) Proceed to open WS regardless
+    const url = `${BACKEND_URL.replace(/^http/,'ws')}/ws/${selectedCustomer}`;
+    // --- CRITICAL FIX: Include user_id in the WS URL ---
+    // const url = `${BACKEND_URL.replace(/^http/,'ws')}/ws/${selectedCustomer}/${currentUserId}`;
+    // ----------------------------------------------------
+    ws = new WebSocket(url);
+    
+    // === NEW: Reset audio tracking state for new connection ===
+    waitingForFirstAI = true;
+    aiAudioBufferEmpty = true;
+    pendingTurnEnd = false;
+    bargeInTriggered = false;
+    // =========================================================
+    
+    micBtn.disabled = true;   // keep disabled until 'ready'
+    endBtn.disabled = true;
+    connectBtn.disabled = true; // disable early to avoid double-clicks
+    setStatus('connected', 'Connecting WebSocket…');
+
+    ws.onopen  = () => {
+        setStatus('connected', 'Connected. Initializing…');
+        
+        // --- FIX: CLEAR OLD OUTCOME DATA ---
+        document.getElementById('outcomePanel').style.display = 'none';
+        document.getElementById('outcomeContent').innerHTML = '';
+        // -----------------------------------
+    };
+    ws.onclose = () => {
+      setStatus('disconnected', callEnded ? 'Call concluded.' : 'Connection closed');
+      connectBtn.disabled = false;
+      stopMic();
+      if (playoutNode) playoutNode.port.postMessage({ type: 'flush' });
+      micBtn.disabled = true;
+      endBtn.disabled = true;
+      // 👇 ADD THIS
+      resetGenderPanel();
+      
+      // Show the button and automatically fetch the transcript
+      viewTranscriptBtn.style.display = 'inline-block';
+      playRecordingBtn.style.display = 'inline-block';
+      fetchAndDisplaySummaries(selectedCustomer);
+    };
+
+    ws.onerror = () => setStatus('disconnected', 'WebSocket error. See console.');
+
+    ws.onmessage = (ev) => {
+      const data = JSON.parse(ev.data);
+      switch (data.type) {
+        case 'ready': {
+          const c = data.customer;
+          setStatus('ready', `🎤 Voice live with ${c.name}`);
+          
+          // The customer info panel is already correct, so we no longer overwrite it here.
+          // All the lines that modified custInfoEl have been removed.
+
+          addMsg('sys', `Call started with ${c.name}`);
+          micBtn.disabled = false;
+          endBtn.disabled = false;
+          micStateEl.textContent = 'Mic idle';
+          break;
+        }
+
+
+        // --- START NEW CASE: REAL-TIME GENDER UPDATE ---
+        case 'voice_gender_update': {
+            const detectedGender = data.detected_gender;
+            // Convert confidence to a percentage string with one decimal place
+            const confidence = (data.confidence * 100).toFixed(1); 
+            
+            const genderEl = document.getElementById('gender-display');
+            const confidenceEl = document.getElementById('confidence-display');
+            const analysisPanel = document.getElementById('voice-gender-analysis');
+
+            if (genderEl) {
+                // Update text to show detected gender (e.g., FEMALE)
+                genderEl.textContent = `Gender: ${detectedGender.toUpperCase()}`;
+            }
+            
+            if (confidenceEl) {
+                // Update text to show confidence score (e.g., Confidence: 95.0%)
+                confidenceEl.textContent = `Confidence: ${confidence}%`;
+            }
+
+            // Optional: Change panel color for visual feedback (based on styles in your <style> block)
+            if (analysisPanel) {
+                if (data.confidence >= 0.8) {
+                    analysisPanel.style.borderColor = '#22c55e'; // Green for high confidence
+                } else if (data.confidence >= 0.6) {
+                    analysisPanel.style.borderColor = '#f59e0b'; // Amber for moderate confidence
+                } else {
+                    analysisPanel.style.borderColor = '#ef4444'; // Red for low confidence
+                }
+            }
+            break;
+        }
+        // --- END NEW CASE ---
+
+        case 'ai_turn_start':
+          console.log('AI Turn Start Signal Received');
+          // === NEW: Reset buffer tracking state ===
+          aiAudioBufferEmpty = false;  // Expect audio coming
+          pendingTurnEnd = false;      // Reset pending flag
+          // ========================================
+          lastUserMessageElement = null; // Reset for the next user turn
+          bargeInTriggered = false;
+          setMicGate(true); // Immediately gate the mic
+          pauseLocalASR();
+          break;
+
+        case 'audio_chunk':
+          // DEBUG: Log audio chunk info
+          console.log(`🔊 Audio chunk: ${data.audio?.length || 0} chars, rate: ${data.sample_rate}`);
+          if (!data.audio || data.audio.length === 0) {
+            console.error(`❌ Empty audio chunk received!`);
+            break;
+          }
+          ensurePlaybackCtx()
+            .then(() => feedAudioFromServer(data.audio, data.sample_rate))
+            .catch(err => console.error(`❌ Audio playback error:`, err));
+          break;
+        case 'ai_turn_end':
+          console.log('AI Turn End Signal Received');
+          
+          // === FIX: Only set isAiSpeaking=false when buffer is actually empty ===
+          // This ensures barge-in still works while audio is playing
+          if (aiAudioBufferEmpty) {
+            // Audio already done, complete turn immediately
+            isAiSpeaking = false;
+            completeTurnAfterPlayback();
+          } else {
+            // Audio still playing - keep isAiSpeaking TRUE for barge-in to work!
+            console.log('⏳ Audio still playing, deferring turn completion (barge-in still active)');
+            pendingTurnEnd = true;
+            // isAiSpeaking remains TRUE here
+          }
+          // ================================================================
+          break;
+
+        case 'ai_response_text': addMsg('ai', data.text); break;
+        case 'agent_action':     showAction(data.action); break;
+        
+        case 'interrupt_acknowledged':
+          // === NEW: Server confirmed user interrupt was processed ===
+          console.log('✅ Server acknowledged interrupt:', data.message);
+          addMsg('sys', '🗣️ User interrupted AI');
+          break;
+        
+        // === NEW: prepare_shutdown - talk-off is playing, stop mic but keep audio going ===
+        case 'prepare_shutdown': {
+          console.log('📢 Prepare shutdown received - disabling mic, talk-off playing');
+          addMsg('sys', '📢 Call ending - please listen...');
+          
+          // Stop mic and disable barge-in so talk-off plays uninterrupted
+          stopMic();
+          micBtn.disabled = true;
+          endBtn.disabled = true;
+          isAiSpeaking = true;  // Keep this true to prevent any mic input
+          micStateEl.textContent = 'Talk-off playing...';
+          
+          // DON'T close WebSocket - audio is still streaming!
+          break;
+        }
+        
+        case 'shutdown_initiated': {
+          addMsg('sys', 'Call is ending. Generating final summary...');
+          setStatus('ready', 'Finalizing call... Please wait.');
+          micBtn.disabled = true;
+          endBtn.disabled = true;
+          micStateEl.textContent = 'Generating summary...';
+          break;
+        }
+        case 'conversation_ended': {
+          callEnded = true;
+          addMsg('sys', 'Call concluded by agent.');
+          stopMic();
+          
+          micBtn.disabled = true;
+          endBtn.disabled = true;
+          micStateEl.textContent = 'Call ended';
+          setStatus('ready', 'Agent ended the call.');
+          // 👇 Optional but nice
+          resetGenderPanel();
+
+          // NEW: Capture call_id and open rating modal
+          currentCallId = data.call_id; 
+          
+          if (currentCallId && currentUserId && selectedCustomer) {
+             const customer = customerListData.find(c => c.id === selectedCustomer);
+             const customerName = customer ? customer.name : 'Unknown';
+             openRatingModal(currentCallId, customerName, currentUserId);
+          }
+          // NEW: render disposition outcome if present
+          if (data.disposition) {
+            renderOutcome(data.disposition);
+          }
+
+          // --- THIS IS THE UPDATED LOGIC ---
+          if (data.transcript_path) {
+            // Extract just the filename from the full "gs://..." path
+            const fullPath = data.transcript_path;
+            const blobName = fullPath.substring(fullPath.indexOf('/', 5) + 1);
+            
+            // CRITICAL: Save this to the global variable so buttons work!
+            lastTranscriptBlobName = blobName; 
+            
+            fetchAndDisplayTranscript(blobName);
+          }
+
+          if (data.evaluation) {
+              lastEvaluationReport = data.evaluation; // Store it!
+              console.log("Received QA Report:", lastEvaluationReport);
+              addMsg('sys', '✅ Quality Assurance Report is ready.');
+          } else {
+              lastEvaluationReport = null;
+          }
+          viewTranscriptBtn.style.display = 'inline-block';
+          playRecordingBtn.style.display = 'inline-block';
+          viewQABtn.style.display = 'inline-block';
+          // --------------------------
+
+          setTimeout(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              try { ws.close(1000, 'Call concluded'); } catch {}
+            }
+          }, 1200);
+          break;
+        }
+        case 'call_summary_saved': {
+          // data.summary_id, data.summary, data.disposition
+          if (data.disposition) {
+            renderOutcome(data.disposition);
+          }
+          // Keep the summaries list fresh
+          if (selectedCustomer) fetchAndDisplaySummaries(selectedCustomer);
+          break;
+        }
+
+         case 'user_transcript':
+          if (lastUserMessageElement) {
+            // If we already created a message element for this user turn, just UPDATE its text.
+            lastUserMessageElement.textContent = '👤 YYou: ' + data.text;
+          } else {
+            // If this is the first message for a new user turn, CREATE a new element.
+            const d = document.createElement('div');
+            d.className = 'msg user';
+            d.textContent = '👤 MYou: ' + data.text;
+            convEl.appendChild(d);
+            // And now we store a reference to this new element for future updates.
+            lastUserMessageElement = d; 
+          }
+          // Always keep the conversation scrolled to the bottom.
+          convEl.scrollTop = convEl.scrollHeight;
+          break;
+
+        case 'error':            addMsg('sys', `Error: ${data.message}`); break;
+      }
+    };
+  })();
+});
+
+
+/** ======= MICROPHONE STREAM (unchanged, with worklet fallback) ======= */
+micBtn.addEventListener('click', async () => { if (isStreaming) stopMic(); else await startMic(); });
+endBtn.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({type:'end_call'})); ws.close(); }
+  stopMic();
+});
+testBtn.addEventListener('click', async () => {
+  await ensurePlaybackCtx();
+  // 1 second 440Hz test tone at device sample rate
+  const sr = playbackCtx.sampleRate, len = sr;
+  const f32 = new Float32Array(len);
+  for (let i=0;i<len;i++) f32[i] = Math.sin((i/sr)*2*Math.PI*440) * 0.2;
+  playoutNode.port.postMessage({type:'push', buf:f32.buffer}, [f32.buffer]);
+  addMsg('sys','🔊 Test tone enqueued.');
+});
+// ADD THIS EVENT LISTENER FOR THE NEW BUTTON
+// viewTranscriptBtn.addEventListener('click', fetchAndDisplayTranscript);
+console.log("Check 2: Event listener for the transcript button has been attached."); // <-- ADD THIS
+async function startMic(){
+  if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Connect first.'); return; }
+  try {
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount:1, sampleRate:16000, echoCancellation:true, noiseSuppression:true, autoGainControl:true }
+    });
+  } catch(e){ console.error(e); alert('Mic permission denied or unavailable.'); return; }
+  inputCtx = new (window.AudioContext||window.webkitAudioContext)({ sampleRate:16000 });
+  const source = inputCtx.createMediaStreamSource(audioStream);
+  // Try Worklet for capture (inline)
+  try {
+    const capCode = `
+      class PCMWorklet extends AudioWorkletProcessor {
+        process(inputs){
+          const ch = inputs[0] && inputs[0][0]; if (!ch) return true;
+          const copy = new Float32Array(ch.length); copy.set(ch);
+          this.port.postMessage(copy.buffer, [copy.buffer]); return true;
+        }
+      }
+      registerProcessor('pcm-cap', PCMWorklet);
+    `;
+    const blobUrl = URL.createObjectURL(new Blob([capCode], {type:'text/javascript'}));
+    await inputCtx.audioWorklet.addModule(blobUrl);
+    const node = new AudioWorkletNode(inputCtx, 'pcm-cap');
+    node.port.onmessage = (e) => handleMicFloatChunk(new Float32Array(e.data));
+    source.connect(node);
+    micStateEl.textContent = '🔴 Mic live (worklet)';
+  } catch(err){
+    console.warn('Capture worklet failed; using ScriptProcessor:', err);
+    const proc = inputCtx.createScriptProcessor(4096,1,1);
+    proc.onaudioprocess = (e)=> handleMicFloatChunk(new Float32Array(e.inputBuffer.getChannelData(0)));
+    source.connect(proc); proc.connect(inputCtx.destination);
+    scriptProcessor = proc; micStateEl.textContent = '🔴 Mic live (script processor)';
+  }
+    isStreaming = true; micBtn.classList.add('live');
+  
+  // === Check if we should wait for first AI turn ===
+  if (waitingForFirstAI) {
+    setMicGate(true);
+    micStateEl.textContent = '⏳ Waiting for AI...';
+
+    // NEW: safety timeout – if AI never speaks, let user talk
+    if (waitingForFirstAITimer) clearTimeout(waitingForFirstAITimer);
+    waitingForFirstAITimer = setTimeout(() => {
+      if (waitingForFirstAI && !isAiSpeaking) {
+        console.warn('⏱️ No AI greeting detected in time, allowing user to speak first.');
+        waitingForFirstAI = false;
+        setMicGate(false);
+        micStateEl.textContent = '🔴 Mic live';
+      }
+    }, 3500); // 3.5s; tweak as you like
+  } else {
+    setMicGate(false);
+  }
+  // =====================================================
+  
+  startLocalASR();
+}
+
+function stopMic(){
+  isStreaming=false; micBtn.classList.remove('live'); micStateEl.textContent='Mic idle';
+  if (aiSpeakTimer) { clearTimeout(aiSpeakTimer); aiSpeakTimer=null; }
+  isAiSpeaking = false;
+  if (scriptProcessor) { try{scriptProcessor.disconnect();}catch{} scriptProcessor=null; }
+  if (inputCtx) { try{inputCtx.close();}catch{} inputCtx=null; }
+  if (audioStream) { try{audioStream.getTracks().forEach(t=>t.stop());}catch{} audioStream=null; }
+  micAgg=[]; micAggFrames=0;
+  stopLocalASR();
+}
+// Add a threshold for detecting human speech loudness
+const SPEECH_THRESHOLD = 0.1; // Adjust if sensitive (0.01 to 0.05)
+const SPEECH_FRAMES_TO_TRIGGER = 10; // require ~4 consecutive loud frames
+
+let hotFrames = 0;
+
+
+function handleMicFloatChunk(f32){
+  if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+  // === NEW: Block mic if waiting for first AI response ===
+  if (waitingForFirstAI) return;
+  // ======================================================
+
+  // --- Compute RMS ---
+  let sum = 0;
+  for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
+  const rms = Math.sqrt(sum / f32.length);
+
+
+  // --- BARGE-IN DETECTION ---
+  // === NEW: Only trigger if audio buffer is NOT empty (we're actually playing audio) ===
+  if (isAiSpeaking && !aiAudioBufferEmpty && !bargeInTriggered) {
+    // Count consecutive "loud" frames
+    if (rms > SPEECH_THRESHOLD) {
+      hotFrames++;
+    } else {
+      hotFrames = 0;  // reset if any frame is quiet
+    }
+
+    // Only trigger if user was loud for N consecutive frames
+    if (hotFrames >= SPEECH_FRAMES_TO_TRIGGER) {
+      console.log("🗣️ Interruption detected after", hotFrames, "frames");
+
+      if (playoutNode) {
+        playoutNode.port.postMessage({ type: 'flush' });
+      }
+
+      isAiSpeaking = false;
+      aiAudioBufferEmpty = true;  // NEW: Mark buffer as empty after flush
+      bargeInTriggered = true;
+      hotFrames = 0;   // reset for next turn
+      setMicGate(false);
+
+      ws.send(JSON.stringify({ type: 'interrupt_signal' }));
+      return;
+    }
+
+    // If AI is speaking and barge-in not triggered, do NOT send audio
+    return;
+
+  }
+
+  // --- Normal path: aggregate and send to backend ---
+  micAgg.push(f32); micAggFrames += f32.length;
+  if (micAggFrames >= MIC_CHUNK_FRAMES) {
+    const total = micAggFrames;
+    const merged = new Float32Array(total);
+    let o = 0;
+    for (const c of micAgg){ merged.set(c, o); o += c.length; }
+    micAgg = []; micAggFrames = 0;
+    const pcm16 = float32ToPCM16(merged);
+    const b64 = arrayBufferToBase64(pcm16.buffer);
+    ws.send(JSON.stringify({ type: 'audio_data', audio: b64 }));
+  }
+}
+
+
+/** ======= UTIL ======= */
+function float32ToPCM16(f32){
+  const out = new Int16Array(f32.length);
+  for (let i=0;i<f32.length;i++){ let s = Math.max(-1, Math.min(1, f32[i])); out[i] = s<0 ? s*32768 : s*32767; }
+  return out;
+}
+function arrayBufferToBase64(buf){
+  const bytes = new Uint8Array(buf); let s=''; for (let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return btoa(s);
+}
+
+
+// Add this function to calculate and display total outstanding
+function updateCalculatedTotal() {
+  const principal = parseFloat($('#edit-principal-amount').value) || 0;
+  const interest = parseFloat($('#edit-interest-charges').value) || 0;
+  const total = principal + interest;
+  
+  $('#edit-calculated-total').value = `₹${total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
+
+// Add event listeners to recalculate when principal or interest changes
+function setupFinancialCalculations() {
+  $('#edit-principal-amount').addEventListener('input', updateCalculatedTotal);
+  $('#edit-interest-charges').addEventListener('input', updateCalculatedTotal);
+}
+
+// Call this function when the page loads
+document.addEventListener('DOMContentLoaded', setupFinancialCalculations);
+
+/** ======= ADMIN PANEL LOGIC ======= */
+
+const editSummaryModal = $('#edit-summary-modal');
+const editSummaryForm = $('#edit-summary-form');
+
+// Function to open the edit modal for a specific summary
+function openSummaryEditModal(summaryId) {
+  if (!selectedCustomer) return;
+  
+  // Find the full customer object to access its summaries
+  const customer = customerListData.find(c => c.id === selectedCustomer);
+  // Fetch summaries from the server response if not already on the customer object
+  fetch(`${BACKEND_URL}/summaries/${selectedCustomer}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status !== 'success') return;
+      const summary = data.summaries.find(s => s.summary_id === summaryId);
+      if (!summary) {
+        alert('Could not find summary data to edit.');
+        return;
+      }
+      
+      // Populate the form fields
+      $('#edit-summary-id').value = summary.summary_id;
+      $('#edit-summary-disposition').value = summary.disposition || '';
+      $('#edit-summary-text').value = summary.summary_text || '';
+      
+      editSummaryModal.style.display = 'block';
+    });
+}
+
+// Function to close the edit modal
+function closeSummaryEditModal() {
+  editSummaryModal.style.display = 'none';
+}
+
+// Function to handle deleting a summary
+async function deleteSummary(summaryId) {
+  if (!selectedCustomer || !confirm('Are you sure you want to delete this summary?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/summaries/${selectedCustomer}/${summaryId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete summary.');
+    
+    alert('Summary deleted successfully!');
+    fetchAndDisplaySummaries(selectedCustomer); // Refresh the list
+  } catch (error) {
+    console.error('Error deleting summary:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// Function to handle saving the edited summary
+async function handleUpdateSummary(event) {
+  event.preventDefault();
+  const summaryId = $('#edit-summary-id').value;
+  if (!selectedCustomer || !summaryId) return;
+
+  const updatedSummaryData = {
+    disposition: $('#edit-summary-disposition').value,
+    summary_text: $('#edit-summary-text').value,
+  };
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/summaries/${selectedCustomer}/${summaryId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedSummaryData)
+    });
+
+    if (!response.ok) throw new Error('Failed to save summary.');
+    
+    alert('Summary updated successfully!');
+    closeSummaryEditModal();
+    await refreshCurrentCustomerData();
+  } catch (error) {
+    console.error('Error updating summary:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// Attach event listeners for the new summary modal
+$('#cancel-summary-edit').addEventListener('click', closeSummaryEditModal);
+editSummaryForm.addEventListener('submit', handleUpdateSummary);
+/** ======= TRANSACTION ADMIN LOGIC ======= */
+
+const editTransactionModal = $('#edit-transaction-modal');
+const editTransactionForm = $('#edit-transaction-form');
+
+function openTransactionEditModal(transactionId) {
+  if (!selectedCustomer) return;
+  const customer = customerListData.find(c => c.id === selectedCustomer);
+  if (!customer || !customer.transactions) return;
+  
+  const transaction = customer.transactions.find(t => t.transactionId === transactionId);
+  if (!transaction) {
+    alert('Could not find transaction data to edit.');
+    return;
+  }
+  
+  // Populate all form fields
+  $('#edit-transaction-id').value = transaction.transactionId;
+  $('#edit-transaction-amount').value = transaction.amount || 0;
+  $('#edit-transaction-status').value = transaction.status || 'Pending';
+  $('#edit-transaction-remarks').value = transaction.remarks || '';
+  
+  // --- ADDED LINES FOR NEW FIELDS ---
+  $('#edit-transaction-type').value = transaction.type || '';
+  $('#edit-transaction-channel').value = transaction.channel || '';
+  $('#edit-transaction-bankName').value = transaction.bankName || '';
+  // Safely access nested UPI ID
+  $('#edit-transaction-upiTxnId').value = transaction.referenceNumbers?.upiTxnId || '';
+
+  if (transaction.dateTime) {
+    $('#edit-transaction-datetime').value = transaction.dateTime.slice(0, 16);
+  }
+  
+  editTransactionModal.style.display = 'block';
+}
+
+function closeTransactionEditModal() {
+  editTransactionModal.style.display = 'none';
+}
+
+async function deleteTransaction(transactionId) {
+  if (!selectedCustomer || !confirm('Are you sure you want to delete this transaction?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/transactions/${selectedCustomer}/${transactionId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete transaction.');
+    
+    alert('Transaction deleted successfully!');
+    await refreshCustomerList(); // Refresh the entire customer list and info panel
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+async function handleUpdateTransaction(event) {
+  event.preventDefault();
+  const transactionId = $('#edit-transaction-id').value;
+  if (!selectedCustomer || !transactionId) return;
+
+  const updatedTransactionData = {
+    amount: parseFloat($('#edit-transaction-amount').value),
+    status: $('#edit-transaction-status').value,
+    remarks: $('#edit-transaction-remarks').value,
+    dateTime: new Date($('#edit-transaction-datetime').value).toISOString(), 
+  };
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/admin/transactions/${selectedCustomer}/${transactionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedTransactionData)
+    });
+
+    if (!response.ok) throw new Error('Failed to save transaction.');
+    
+    alert('Transaction updated successfully!');
+    closeTransactionEditModal();
+    await refreshCurrentCustomerData();
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// Attach event listeners for the new transaction modal
+$('#cancel-transaction-edit').addEventListener('click', closeTransactionEditModal);
+editTransactionForm.addEventListener('submit', handleTransactionFormSubmit);
+
+// Add this new function in your <script> tag
+async function refreshCurrentCustomerData() {
+  if (!selectedCustomer) return;
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/customer-details/${selectedCustomer}`);
+    const result = await response.json();
+
+    if (result.status === 'success') {
+      // Find the index of the customer in our global list
+      const customerIndex = customerListData.findIndex(c => c.id === selectedCustomer);
+      if (customerIndex !== -1) {
+        // Update the customer's data in the list with the fresh data from the server
+        customerListData[customerIndex] = {
+            ...customerListData[customerIndex], // Keep original top-level data
+            ...result.data.details,           // Overwrite with updated details
+            transactions: result.data.transactions // Overwrite with updated transactions
+        };
+        
+        // Trigger the 'change' event on the dropdown. This will make your
+        // existing code run again to redraw the info panel with the fresh data.
+        customerEl.dispatchEvent(new Event('change'));
+      }
+    }
+  } catch (error) {
+    console.error("Failed to refresh customer data:", error);
+  }
+}
+
+async function handleTransactionFormSubmit(event) {
+  event.preventDefault();
+  const transactionId = $('#edit-transaction-id').value;
+  if (!selectedCustomer) return;
+
+  const isUpdate = !!transactionId;
+  
+  // Build the complete payload with all fields from the form
+  const payload = {
+    amount: parseFloat($('#edit-transaction-amount').value),
+    status: $('#edit-transaction-status').value,
+    remarks: $('#edit-transaction-remarks').value,
+    dateTime: new Date($('#edit-transaction-datetime').value).toISOString(),
+    
+    // --- ADDED LINES FOR NEW FIELDS ---
+    type: $('#edit-transaction-type').value,
+    channel: $('#edit-transaction-channel').value,
+    bankName: $('#edit-transaction-bankName').value,
+    currency: 'INR', // Defaulting currency, as it's not in the form
+    referenceNumbers: {
+      upiTxnId: $('#edit-transaction-upiTxnId').value
+    }
+  };
+
+  const url = isUpdate 
+    ? `${BACKEND_URL}/admin/transactions/${selectedCustomer}/${transactionId}`
+    : `${BACKEND_URL}/admin/transactions/${selectedCustomer}`;
+  
+  const method = isUpdate ? 'PUT' : 'POST';
+
+  try {
+    const response = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error(`Failed to ${isUpdate ? 'update' : 'create'} transaction.`);
+    
+    alert(`Transaction ${isUpdate ? 'updated' : 'created'} successfully!`);
+    
+    closeTransactionEditModal();
+    await refreshCurrentCustomerData();
+  } catch (error) {
+    console.error(`Error a transaction:`, error);
+    alert(`Error: ${error.message}`);
+  }
+}
+
+// Add this new function
+function openAddTransactionModal() {
+  // Reset the form for a new entry
+  editTransactionForm.reset();
+  
+  // Clear the hidden ID field to signal that this is a "create" action
+  $('#edit-transaction-id').value = '';
+  
+  // Update UI for "Add" mode
+  $('#edit-transaction-modal .title').textContent = 'Add New Transaction';
+  $('#edit-transaction-form button[type="submit"]').textContent = 'Create Transaction';
+  
+  editTransactionModal.style.display = 'block';
+}
+
+playRecordingBtn.addEventListener('click', () => {
+  if (!selectedCustomer) {
+    alert("Please select a customer first.");
+    return;
+  }
+  
+  addMsg('sys', '🔊 Loading last call recording...');
+  
+  // Set the source of the audio player element in the modal
+  audioPlayer.src = `${BACKEND_URL}/latest-recording/${selectedCustomer}`;
+  audioPlayer.load();
+  audioPlayer.play().catch(error => {
+      console.error("Audio playback failed:", error);
+      addMsg('sys', `Error playing audio: ${error.message}`);
+  });
+  
+  // Show the modal
+  audioPlayerModal.style.display = 'block';
+});
+
+closeAudioPlayerBtn.addEventListener('click', () => {
+  audioPlayer.pause(); // Stop playback when closing
+  audioPlayer.src = ""; // Clear the source to stop buffering
+  audioPlayerModal.style.display = 'none';
+});
+// });
+async function fetchAndShowQualityReport() {
+    // 1. FAST PATH: Use data from WebSocket
+    if (lastEvaluationReport) {
+        renderQAModal(lastEvaluationReport);
+        return;
+    }
+
+    // 2. SLOW PATH: Fetch from API (Fallback)
+    if (!lastTranscriptBlobName) {
+        alert("No transcript available to evaluate.");
+        return;
+    }
+
+    viewQABtn.disabled = true;
+    viewQABtn.textContent = "Analyzing...";
+
+    try {
+        const response = await fetch(`${BACKEND_URL}/evaluate-transcript?blob_name=${encodeURIComponent(lastTranscriptBlobName)}`);
+        const data = await response.json();
+
+        if (data.status !== 'success') throw new Error(data.message);
+        renderQAModal(data.report);
+
+    } catch (e) {
+        console.error("QA Error:", e);
+        alert(`Error: ${e.message}`);
+    } finally {
+        viewQABtn.disabled = false;
+        viewQABtn.textContent = "📋 View Quality Report";
+    }
+}
+
+function renderQAModal(report) {
+
+    // Filter out metadata and keep only criteria entries (those with a numeric score)
+    const criteriaEntries = Object.entries(report).filter(([key, val]) => 
+        key !== '_metadata' && val && typeof val.score === 'number'
+    );
+    
+    // Calculate Score safely
+    const totalScore = criteriaEntries.reduce((sum, [, val]) => sum + val.score, 0);
+    const maxScore = criteriaEntries.length;
+    const score = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+    
+
+    // Update Header
+    qaTotalScore.textContent = `${score}%`;
+    qaTotalScore.style.color = score >= 80 ? '#059669' : (score < 50 ? '#dc2626' : '#d97706');
+
+    // Build Table
+    qaTableBody.innerHTML = '';
+    criteriaEntries.forEach(([key, val]) => {
+        const row = document.createElement('tr');
+        const criteriaName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const badgeClass = val.score === 1 ? 'qa-pass' : 'qa-fail';
+        const badgeText = val.score === 1 ? 'PASS' : 'FAIL';
+        
+        row.innerHTML = `
+            <td><div style="font-weight:600; color:#1e293b;">${criteriaName}</div></td>
+            <td><span class="${badgeClass}">${badgeText}</span></td>
+            <td><div class="qa-evidence">${val.evidence || 'No evidence found.'}</div></td>
+        `;
+        qaTableBody.appendChild(row);
+    });
+
+    qaModal.style.display = 'block';
+}
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Survey Intelligence Dashboard</title>
+<title>Campaign Analytics Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -318,389 +318,213 @@ body{
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
-const Recharts = window.Recharts;
-const {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis, Legend
-} = Recharts;
+const { useState, useEffect, useRef, useMemo } = React;
+const { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+        PieChart, Pie, Cell, LineChart, Line, Legend } = window.Recharts;
 
-/* ═══════════════════════════════════════════════════════════════
-   COLOUR PALETTE
-═══════════════════════════════════════════════════════════════ */
 const PALETTE = ['#b8ff57','#57d9ff','#ff6b8a','#a78bfa','#ffb347','#57ffb8','#ff8c57','#57a8ff'];
 const TOOLTIP_STYLE = {
   contentStyle:{background:'#1a1a24',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,fontSize:12,color:'#e8e8f0'},
   cursor:{fill:'rgba(255,255,255,0.04)'}
 };
+const API_BASE = window.location.origin;
 
-/* ═══════════════════════════════════════════════════════════════
-   SAMPLE DATASET  (pre-loaded — user can replace with upload)
-═══════════════════════════════════════════════════════════════ */
-const SAMPLE_DATA = [
-  {age:30,Gender:'M',State:'Kerala',Q1:4,Q2:3,Q3:'Yes',Q4:'MS Dhoni',Concern1:'Inflation',Concern2:'Law and Order',Concern3:'Pollution'},
-  {age:42,Gender:'F',State:'Tamil Nadu',Q1:3,Q2:2,Q3:'No',Q4:'Virat Kohli',Concern1:'Inflation',Concern2:'Joblessness',Concern3:'Pollution'},
-  {age:25,Gender:'M',State:'Karnataka',Q1:4,Q2:4,Q3:'Yes',Q4:'Neeraj Chopra',Concern1:'Joblessness',Concern2:'Inflation',Concern3:'Law and Order'},
-  {age:36,Gender:'F',State:'Telangana',Q1:2,Q2:2,Q3:'No',Q4:'MS Dhoni',Concern1:'Inflation',Concern2:'Pollution',Concern3:'Joblessness'},
-  {age:51,Gender:'M',State:'Andhra Pradesh',Q1:5,Q2:4,Q3:'Yes',Q4:'Sachin Tendulkar',Concern1:'Inflation',Concern2:'Relations with neighbours',Concern3:'Law and Order'},
-  {age:28,Gender:'F',State:'Kerala',Q1:3,Q2:3,Q3:'Yes',Q4:'PV Sindhu',Concern1:'Joblessness',Concern2:'Pollution',Concern3:'Inflation'},
-  {age:45,Gender:'M',State:'Maharashtra',Q1:2,Q2:1,Q3:'No',Q4:'Sachin Tendulkar',Concern1:'Law and Order',Concern2:'Inflation',Concern3:'Joblessness'},
-  {age:33,Gender:'F',State:'Gujarat',Q1:4,Q2:4,Q3:'Yes',Q4:'Virat Kohli',Concern1:'Pollution',Concern2:'Inflation',Concern3:'Relations with neighbours'},
-  {age:22,Gender:'M',State:'Rajasthan',Q1:3,Q2:2,Q3:'No',Q4:'Neeraj Chopra',Concern1:'Joblessness',Concern2:'Law and Order',Concern3:'Inflation'},
-  {age:38,Gender:'F',State:'Madhya Pradesh',Q1:1,Q2:1,Q3:'No',Q4:'PV Sindhu',Concern1:'Law and Order',Concern2:'Joblessness',Concern3:'Pollution'},
-  {age:55,Gender:'M',State:'Uttar Pradesh',Q1:5,Q2:5,Q3:'Yes',Q4:'Sachin Tendulkar',Concern1:'Inflation',Concern2:'Law and Order',Concern3:'Joblessness'},
-  {age:29,Gender:'F',State:'West Bengal',Q1:2,Q2:2,Q3:'No',Q4:'Sourav Ganguly',Concern1:'Joblessness',Concern2:'Pollution',Concern3:'Relations with neighbours'},
-  {age:41,Gender:'M',State:'Bihar',Q1:4,Q2:3,Q3:'Yes',Q4:'MS Dhoni',Concern1:'Joblessness',Concern2:'Inflation',Concern3:'Law and Order'},
-  {age:27,Gender:'F',State:'Punjab',Q1:3,Q2:3,Q3:'Yes',Q4:'Kapil Dev',Concern1:'Inflation',Concern2:'Pollution',Concern3:'Joblessness'},
-  {age:49,Gender:'M',State:'Haryana',Q1:1,Q2:1,Q3:'No',Q4:'Neeraj Chopra',Concern1:'Relations with neighbours',Concern2:'Law and Order',Concern3:'Inflation'},
-  {age:35,Gender:'F',State:'Odisha',Q1:4,Q2:3,Q3:'Yes',Q4:'Saina Nehwal',Concern1:'Joblessness',Concern2:'Inflation',Concern3:'Pollution'},
-  {age:23,Gender:'M',State:'Jharkhand',Q1:3,Q2:2,Q3:'No',Q4:'Dhoni',Concern1:'Joblessness',Concern2:'Pollution',Concern3:'Inflation'},
-  {age:44,Gender:'F',State:'Assam',Q1:2,Q2:2,Q3:'No',Q4:'Mary Kom',Concern1:'Inflation',Concern2:'Relations with neighbours',Concern3:'Pollution'},
-  {age:31,Gender:'M',State:'Kerala',Q1:5,Q2:4,Q3:'Yes',Q4:'Virat Kohli',Concern1:'Pollution',Concern2:'Inflation',Concern3:'Relations with neighbours'},
-  {age:26,Gender:'F',State:'Tamil Nadu',Q1:4,Q2:4,Q3:'Yes',Q4:'PV Sindhu',Concern1:'Joblessness',Concern2:'Inflation',Concern3:'Law and Order'},
-  {age:48,Gender:'M',State:'Karnataka',Q1:2,Q2:2,Q3:'No',Q4:'Sachin Tendulkar',Concern1:'Law and Order',Concern2:'Pollution',Concern3:'Joblessness'},
-  {age:39,Gender:'F',State:'Maharashtra',Q1:3,Q2:3,Q3:'Yes',Q4:'Sania Mirza',Concern1:'Inflation',Concern2:'Joblessness',Concern3:'Pollution'},
-  {age:52,Gender:'M',State:'Gujarat',Q1:4,Q2:4,Q3:'Yes',Q4:'Virat Kohli',Concern1:'Inflation',Concern2:'Law and Order',Concern3:'Relations with neighbours'},
-  {age:24,Gender:'F',State:'Rajasthan',Q1:1,Q2:1,Q3:'No',Q4:'PV Sindhu',Concern1:'Joblessness',Concern2:'Pollution',Concern3:'Law and Order'},
-  {age:37,Gender:'M',State:'Uttar Pradesh',Q1:3,Q2:2,Q3:'No',Q4:'MS Dhoni',Concern1:'Law and Order',Concern2:'Joblessness',Concern3:'Inflation'},
-];
-
-/* ═══════════════════════════════════════════════════════════════
-   VERTEX AI BACKEND CALL  (routes through /api/ai on our FastAPI server)
-   Replaces the direct Anthropic API call — uses the same Vertex AI
-   model cascade (gemini-2.0-flash → gemini-1.5-flash) that the rest
-   of the survey agent uses for transcript extraction and gender detection.
-═══════════════════════════════════════════════════════════════ */
-const API_BASE = window.location.origin; // e.g. http://localhost:8000
-
-async function callAI(systemPrompt, userPrompt, _maxTokens = 2000) {
-  const res = await fetch(`${API_BASE}/api/ai`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ system: systemPrompt, prompt: userPrompt })
-  });
-  if (!res.ok) throw new Error(`AI endpoint error ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.text || '';
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   UNIVERSAL ROW NORMALISER
-   Handles every column naming variant:
-     • CSV upload:    "Q1 - (Satisfaction With Government) " (trailing spaces),
-                      "Q5 - (Top 3 Concerns)" merged header, double-header rows
-     • Google Sheet:  "Q1 - (How Satisfied are you with the Government)",
-                      "Concern1","Concern2","Concern3" separate columns
-     • Agent output:  "q1_satisfaction", "q5_top3_concerns"
-     • Internal:       Q1, Q2, Q3, Q4, Concern1/2/3 (already normalised)
-═══════════════════════════════════════════════════════════════ */
-function normaliseRow(row) {
-  // Build a trimmed-key version of the row so trailing/leading spaces
-  // in CSV column headers never cause a miss
-  const trimmedRow = {};
-  Object.keys(row).forEach(k => { trimmedRow[k.trim()] = row[k]; });
-
-  // Primary exact lookup (tries trimmed keys first, then original)
-  const g = (keys) => {
-    for (const k of keys) {
-      const kt = k.trim();
-      // Try trimmed row first
-      let v = trimmedRow[kt];
-      if (v === undefined) v = trimmedRow[k];
-      if (v === undefined) v = row[k];
-      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
-    }
-    // Fallback: partial match — find any key that contains one of our target strings
-    const allKeys = Object.keys(trimmedRow);
-    for (const k of keys) {
-      const kt = k.trim().toLowerCase();
-      const match = allKeys.find(ak => ak.toLowerCase().includes(kt) || kt.includes(ak.toLowerCase()));
-      if (match) {
-        const v = trimmedRow[match];
-        if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
-      }
-    }
-    return '';
-  };
-
-  // Numeric lookup — returns the number, or null if missing/No Response
-  const gNum = (keys) => {
-    const raw = g(keys);
-    if (!raw || raw.toLowerCase() === 'no response') return null;
-    const n = Number(raw);
-    return isNaN(n) ? null : n;
-  };
-
-  // Q5 concerns — handle both merged single-cell and three separate columns
-  const mergedQ5 = g([
-    'Q5 - (Top 3 Concerns)', 'Question 5 (Top 3 Concerns)',
-    'q5_top3_concerns', 'Q5'
-  ]);
-  // Separate concern columns (preferred when present)
-  const rawC1 = g(['Concern1', 'concern1']);
-  const rawC2 = g(['Concern2', 'concern2']);
-  const rawC3 = g(['Concern3', 'concern3']);
-  // If separate columns are missing, split the merged Q5 cell
-  const splitQ5 = mergedQ5 ? mergedQ5.split(',').map(s => s.trim()) : [];
-  const c1 = rawC1 || splitQ5[0] || '';
-  const c2 = rawC2 || splitQ5[1] || '';
-  const c3 = rawC3 || splitQ5[2] || '';
-
-  const q1 = gNum([
-    'Q1 - (How Satisfied are you with the Government)',
-    'Q1 - (Satisfaction With Government)',
-    'Q1 - (Govt Satisfaction)',
-    'Question 1 (Govt Satisfaction)',
-    'q1_satisfaction', 'Q1'
-  ]);
-  const q2 = gNum([
-    'Q2 - (How do you think the Government has done on tacking Price rise)',
-    'Q2 - (Government Handling Of Price Rise)',
-    'Q2 - (Price Rise)',
-    'Question 2 (Price Rise)',
-    'q2_price_rise', 'Q2'
-  ]);
-
-  return {
-    Call_id:  g(['Call_id','call_id','Question','question','#','Row','row']) || '',
-    age:      g(['age','Age','AGE']),
-    Gender:   g(['Gender','gender','GENDER']),
-    State:    g(['State','state','STATE']),
-    Q1: q1,   // null means "No Response"; charts skip nulls; 0 means genuine score 0
-    Q2: q2,
-    Q3: g([
-      'Q3 - (Will you vote for the Government)',
-      'Q3 - (Voting Intention)',
-      'Question 3 (Vote for Govt)',
-      'q3_vote', 'Q3'
-    ]),
-    Q4: g([
-      "Q4 - (Who do you think is India's greatest sportsman)",
-      'Q4 - (Greatest Sportsman)',
-      'Question 4 (Greatest Sportsman)',
-      'q4_greatest_sportsman', 'Q4'
-    ]),
-    Concern1: c1,
-    Concern2: c2,
-    Concern3: c3,
-  };
-}
-
-
-/* ═══════════════════════════════════════════════════════════════
-   SURVEY SCHEMA — single source of truth for column meanings.
-   Injected into every AI prompt so the chatbot always knows
-   exactly what Q1–Q4 mean, regardless of column names in the data.
-═══════════════════════════════════════════════════════════════ */
-const SURVEY_SCHEMA = `
-SURVEY COLUMN DEFINITIONS (use these exact descriptions — never guess):
-- Call_id   : Unique identifier for each survey call
-- age       : Respondent's age in years (numeric)
-- Gender    : Respondent's gender — M (Male), F (Female), or Unknown (voice-detected)
-- State     : Indian state of residence of the respondent
-- Q1        : Government Satisfaction Score — "How satisfied are you with the Government?"
-              Scale: 0 = No Opinion, 1 = Very Dissatisfied, 2 = Dissatisfied,
-              3 = Neither Dissatisfied nor Satisfied, 4 = Satisfied, 5 = Extremely Satisfied
-- Q2        : Price Rise Handling Score — "How do you think the Government has done on tackling price rise?"
-              Same scale: 0 = No Opinion, 1 = Very Dissatisfied, 2 = Dissatisfied,
-              3 = Neither Dissatisfied nor Satisfied, 4 = Satisfied, 5 = Extremely Satisfied
-- Q3        : Voting Intention — "Will you vote for the Government?" — Yes or No
-- Q4        : India's Greatest Sportsman — "Who do you think is India's greatest sportsman?" (open text)
-- Concern1  : Respondent's 1st biggest national concern (from: Inflation, Law and Order,
-              Joblessness, Pollution, Relations with neighbours)
-- Concern2  : Respondent's 2nd biggest national concern (same options as Concern1)
-- Concern3  : Respondent's 3rd biggest national concern (same options as Concern1)
-`;
-
-/* ── Load live data from Google Sheet via /api/survey-data ── */
-async function loadSurveyData() {
-  try {
-    const res = await fetch(`${API_BASE}/api/survey-data`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (json.error || !json.data?.length) return null;
-    return cleanData(json.data.map(normaliseRow));
-  } catch(e) {
-    console.warn('Could not load sheet data:', e.message);
-    return null;
-  }
-}
+/* ── Auth ── */
+const getToken = () => localStorage.getItem('token');
+const authHdrs = () => ({ 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' });
 
 function parseJSON(raw) {
+  try { return JSON.parse(raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim()); }
+  catch { return null; }
+}
+
+/* ═══════════════════════════════════════════════════
+   BACKEND AI CALL
+═══════════════════════════════════════════════════ */
+async function callAI(system, prompt) {
+  const r = await fetch(`${API_BASE}/api/ai`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({system, prompt})
+  });
+  if (!r.ok) throw new Error(`AI ${r.status}`);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d.text || '';
+}
+
+/* ═══════════════════════════════════════════════════
+   API LOADERS
+═══════════════════════════════════════════════════ */
+async function fetchCampaigns() {
   try {
-    const cleaned = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    return JSON.parse(cleaned);
+    const r = await fetch(`${API_BASE}/admin/campaigns`, {headers: authHdrs()});
+    if (r.status === 401) { window.location.href='/login.html'; return []; }
+    return r.ok ? r.json() : [];
+  } catch { return []; }
+}
+
+async function fetchCampaignData(campaignId) {
+  try {
+    const r = await fetch(`${API_BASE}/admin/campaign/${campaignId}/sheet-data`, {headers: authHdrs()});
+    if (!r.ok) return null;
+    const j = await r.json();
+    return (j.data && j.data.length) ? j.data : null;
   } catch { return null; }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   DATA CLEANER
-   Removes rows where the respondent declined (all meaningful fields
-   are "No Response") and filters out completely empty / header rows.
-   Called after normalisation before passing data to the AI/charts.
-═══════════════════════════════════════════════════════════════ */
-function cleanData(rows) {
-  const HEADER_WORDS = ['concern','question','call_id','gender','state','age','q1','q2','q3','q4','q5'];
-  return rows.filter(r => {
-    // Drop rows with no age AND no state (likely header or junk rows)
-    if (!r.age && !r.State) return false;
-    // Drop rows where "age" is a header keyword (double-header row artifact)
-    if (r.age && HEADER_WORDS.some(w => String(r.age).toLowerCase().includes(w))) return false;
-    // Drop rows where every meaningful survey field is "No Response" (declined calls)
-    const fields = [r.age, r.Gender, r.State, r.Q3, r.Q4, r.Concern1];
-    const allNoResponse = fields.every(v =>
-      !v || v === '' || String(v).toLowerCase() === 'no response'
-    );
-    return !allNoResponse;
-  });
-}
+/* ═══════════════════════════════════════════════════
+   COLUMN INTROSPECTION
+   Analyses actual data columns — no hardcoding
+═══════════════════════════════════════════════════ */
+function introspectColumns(rows) {
+  if (!rows.length) return {};
+  const result = {};
+  Object.keys(rows[0]).forEach(col => {
+    const vals = rows.map(r => r[col]).filter(v => v !== null && v !== '' && v !== undefined);
+    if (!vals.length) return;
+    const nums = vals.filter(v => !isNaN(Number(v)) && String(v).trim() !== '').map(Number);
+    const strs = vals.map(v => String(v).trim());
+    const freq = {};
+    strs.forEach(v => { freq[v] = (freq[v]||0)+1; });
+    const uniq = Object.keys(freq);
 
-/* ═══════════════════════════════════════════════════════════════
-   DATA ANALYSIS HELPERS
-═══════════════════════════════════════════════════════════════ */
-function summarise(data) {
-  if (!data.length) return {};
-  const keys = Object.keys(data[0]);
-  const out = {};
-  keys.forEach(k => {
-    const vals = data.map(r => r[k]);
-    const nums = vals.filter(v => v !== null && v !== '' && !isNaN(Number(v))).map(Number);
-    if (nums.length > data.length * 0.5) {
-      out[k] = {type:'numeric', min:Math.min(...nums), max:Math.max(...nums),
-        mean:(nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2), count:nums.length};
+    if (nums.length >= vals.length * 0.7 && nums.length >= 2) {
+      result[col] = {
+        kind: 'numeric',
+        min: Math.min(...nums), max: Math.max(...nums),
+        mean: +(nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(2),
+        count: nums.length
+      };
+    } else if (uniq.length <= 2 && uniq.map(v=>v.toLowerCase()).every(v=>['yes','no','y','n','true','false','m','f','male','female'].includes(v))) {
+      result[col] = { kind: 'binary', values: uniq, freq };
+    } else if (uniq.length <= 20) {
+      result[col] = { kind: 'categorical', values: uniq, freq, unique: uniq.length };
     } else {
-      const freq = {};
-      vals.forEach(v => { const s = String(v||''); freq[s] = (freq[s]||0)+1; });
-      out[k] = {type:'categorical', unique:Object.keys(freq).length,
-        topValues:Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,5)};
+      result[col] = { kind: 'text', unique: uniq.length, sample: uniq.slice(0,5) };
     }
   });
-  return out;
+  return result;
 }
 
-function runAggregation(data, plan) {
-  /* plan: {type, groupBy, valueCol, filter, operation} */
-  let rows = [...data];
+/* Clean rows that are entirely "No Response" */
+function cleanRows(rows) {
+  return rows.filter(r => {
+    const vals = Object.values(r).map(v => String(v||'').trim().toLowerCase());
+    const meaningful = vals.filter(v => v && v !== 'no response' && v !== 'undefined' && v !== 'null');
+    return meaningful.length >= 2;
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   AGGREGATION ENGINE  (fully column-agnostic)
+═══════════════════════════════════════════════════ */
+function aggregate(rows, plan) {
+  let data = [...rows];
+
   if (plan.filter) {
     const {col, op, val} = plan.filter;
-    rows = rows.filter(r => {
-      const rv = r[col];
-      if (op === 'eq')  return String(rv) === String(val);
-      if (op === 'gte') return Number(rv) >= Number(val);
-      if (op === 'lte') return Number(rv) <= Number(val);
-      if (op === 'contains') return String(rv).toLowerCase().includes(String(val).toLowerCase());
+    data = data.filter(r => {
+      const v = r[col];
+      if (op==='eq')       return String(v).toLowerCase()===String(val).toLowerCase();
+      if (op==='gte')      return Number(v)>=Number(val);
+      if (op==='lte')      return Number(v)<=Number(val);
+      if (op==='contains') return String(v).toLowerCase().includes(String(val).toLowerCase());
       return true;
     });
   }
+
+  const clean = v => v !== null && v !== undefined && String(v).trim() !== '' && String(v).toLowerCase() !== 'no response';
+
   if (plan.type === 'count_by') {
     const freq = {};
-    rows.forEach(r => { const k = String(r[plan.groupBy]||'N/A'); freq[k]=(freq[k]||0)+1; });
-    return Object.entries(freq).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+    data.forEach(r => { if (clean(r[plan.groupBy])) { const k=String(r[plan.groupBy]).trim(); freq[k]=(freq[k]||0)+1; }});
+    return Object.entries(freq).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value).slice(0,15);
   }
   if (plan.type === 'avg_by') {
-    const groups = {};
-    rows.forEach(r => {
-      const k = String(r[plan.groupBy]||'N/A');
-      if (!groups[k]) groups[k] = [];
-      const rawV = r[plan.valueCol];
-      if (rawV === null || rawV === undefined || rawV === '') return;
-      const v = Number(rawV);
-      if (!isNaN(v)) groups[k].push(v);
+    const grp = {};
+    data.forEach(r => {
+      const k = String(r[plan.groupBy]||'').trim();
+      const v = Number(r[plan.valueCol]);
+      if (!k || !clean(r[plan.groupBy]) || isNaN(v)) return;
+      if (!grp[k]) grp[k]=[];
+      grp[k].push(v);
     });
-    return Object.entries(groups).map(([name,arr])=>({
-      name, value:parseFloat((arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2))
-    })).sort((a,b)=>b.value-a.value);
+    return Object.entries(grp)
+      .filter(([,a])=>a.length>0)
+      .map(([name,arr])=>({name, value:+(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2)}))
+      .sort((a,b)=>b.value-a.value).slice(0,12);
   }
   if (plan.type === 'distribution') {
     const freq = {};
-    rows.forEach(r => { const k = String(r[plan.groupBy]||'N/A'); freq[k]=(freq[k]||0)+1; });
-    const total = rows.length;
-    return Object.entries(freq).map(([name,count])=>({name,value:count,pct:((count/total)*100).toFixed(1)}))
-      .sort((a,b)=>b.value-a.value);
+    data.forEach(r => { if (clean(r[plan.groupBy])) { const k=String(r[plan.groupBy]).trim(); freq[k]=(freq[k]||0)+1; }});
+    const total = data.length;
+    return Object.entries(freq)
+      .map(([name,count])=>({name,value:count,pct:+((count/total)*100).toFixed(1)}))
+      .sort((a,b)=>b.value-a.value).slice(0,12);
   }
-  if (plan.type === 'cross_tab') {
-    const result = {};
-    rows.forEach(r => {
-      const g = String(r[plan.groupBy]||'N/A');
-      const v = String(r[plan.valueCol]||'N/A');
-      if (!result[g]) result[g] = {};
-      result[g][v] = (result[g][v]||0)+1;
-    });
-    return result;
-  }
-  if (plan.type === 'concern_frequency') {
+  if (plan.type === 'multi_col_freq') {
     const freq = {};
-    rows.forEach(r => {
-      ['Concern1','Concern2','Concern3'].forEach(c => {
-        if (r[c] && r[c] !== 'undefined') freq[r[c]] = (freq[r[c]]||0)+1;
-      });
+    (plan.cols||[]).forEach(col => {
+      data.forEach(r => { if (clean(r[col])) { const k=String(r[col]).trim(); freq[k]=(freq[k]||0)+1; }});
     });
-    return Object.entries(freq).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+    return Object.entries(freq).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value).slice(0,15);
   }
   return [];
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   CHART RENDERER  (picks the best chart type from plan)
-═══════════════════════════════════════════════════════════════ */
-function ChartRenderer({ plan, data, title, subtitle }) {
-  const processed = useMemo(() => {
-    try { return runAggregation(data, plan); } catch { return []; }
-  }, [data, plan]);
+/* ═══════════════════════════════════════════════════
+   CHART RENDERER
+═══════════════════════════════════════════════════ */
+function ChartRenderer({plan, data, title, subtitle}) {
+  const chartData = useMemo(() => { try { return aggregate(data, plan); } catch { return []; }}, [data, plan]);
 
-  const chartData = Array.isArray(processed) ? processed : [];
+  if (!chartData.length) return (
+    <div className="chart-card">
+      <div className="chart-title"><span style={{color:PALETTE[0]}}>◆</span> {title}</div>
+      <div className="chart-body"><div className="empty"><div className="empty-icon">📊</div><div className="empty-text">Not enough data yet</div></div></div>
+    </div>
+  );
 
-  const renderChart = () => {
-    if (!chartData.length) return <div className="empty"><div className="empty-icon">📊</div><div className="empty-text">No data for this chart</div></div>;
-    const t = plan.chartType || 'bar';
+  const t = plan.chartType || 'bar';
+  const h = Math.max(180, chartData.length * (t==='horizontal_bar' ? 36 : 1));
 
-    if (t === 'pie' || t === 'donut') {
-      return (
-        <ResponsiveContainer width="100%" height={200}>
-          <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name"
-              cx="50%" cy="50%"
-              innerRadius={t==='donut'?50:0} outerRadius={80}
-              paddingAngle={2}>
-              {chartData.map((_, i) => <Cell key={i} fill={PALETTE[i%PALETTE.length]}/>)}
-            </Pie>
-            <Tooltip {...TOOLTIP_STYLE}/>
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:11,color:'#9494b0'}}/>
-          </PieChart>
-        </ResponsiveContainer>
-      );
-    }
-    if (t === 'horizontal_bar') {
-      return (
-        <ResponsiveContainer width="100%" height={Math.max(180, chartData.length*36)}>
-          <BarChart data={chartData} layout="vertical" margin={{left:80,right:16,top:4,bottom:4}}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false}/>
-            <XAxis type="number" tick={{fontSize:11,fill:'#6b6b8a'}} axisLine={false} tickLine={false}/>
-            <YAxis type="category" dataKey="name" tick={{fontSize:11,fill:'#9494b0'}} axisLine={false} tickLine={false} width={76}/>
-            <Tooltip {...TOOLTIP_STYLE}/>
-            <Bar dataKey="value" radius={[0,4,4,0]}>
-              {chartData.map((_,i)=><Cell key={i} fill={PALETTE[i%PALETTE.length]}/>)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-    if (t === 'line') {
-      return (
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={chartData} margin={{left:8,right:16,top:4,bottom:4}}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
-            <XAxis dataKey="name" tick={{fontSize:11,fill:'#6b6b8a'}} axisLine={false} tickLine={false}/>
-            <YAxis tick={{fontSize:11,fill:'#6b6b8a'}} axisLine={false} tickLine={false}/>
-            <Tooltip {...TOOLTIP_STYLE}/>
-            <Line type="monotone" dataKey="value" stroke="#b8ff57" strokeWidth={2} dot={{fill:'#b8ff57',r:3}}/>
-          </LineChart>
-        </ResponsiveContainer>
-      );
-    }
-    /* default: vertical bar */
+  const chart = (() => {
+    if (t === 'pie' || t === 'donut') return (
+      <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+            innerRadius={t==='donut'?55:0} outerRadius={85} paddingAngle={2}>
+            {chartData.map((_,i)=><Cell key={i} fill={PALETTE[i%PALETTE.length]}/>)}
+          </Pie>
+          <Tooltip {...TOOLTIP_STYLE}/>
+          <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:11,color:'#9494b0'}}/>
+        </PieChart>
+      </ResponsiveContainer>
+    );
+    if (t === 'horizontal_bar') return (
+      <ResponsiveContainer width="100%" height={h}>
+        <BarChart data={chartData} layout="vertical" margin={{left:110,right:20,top:4,bottom:4}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false}/>
+          <XAxis type="number" tick={{fontSize:11,fill:'#6b6b8a'}} axisLine={false} tickLine={false}/>
+          <YAxis type="category" dataKey="name" tick={{fontSize:11,fill:'#9494b0'}} axisLine={false} tickLine={false} width={106}/>
+          <Tooltip {...TOOLTIP_STYLE}/>
+          <Bar dataKey="value" radius={[0,4,4,0]}>
+            {chartData.map((_,i)=><Cell key={i} fill={PALETTE[i%PALETTE.length]}/>)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    );
+    if (t === 'line') return (
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={chartData} margin={{left:8,right:16,top:4,bottom:4}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
+          <XAxis dataKey="name" tick={{fontSize:11,fill:'#6b6b8a'}} axisLine={false} tickLine={false}/>
+          <YAxis tick={{fontSize:11,fill:'#6b6b8a'}} axisLine={false} tickLine={false}/>
+          <Tooltip {...TOOLTIP_STYLE}/>
+          <Line type="monotone" dataKey="value" stroke="#b8ff57" strokeWidth={2} dot={{fill:'#b8ff57',r:3}}/>
+        </LineChart>
+      </ResponsiveContainer>
+    );
     return (
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={chartData} margin={{left:8,right:8,top:4,bottom:4}}>
@@ -714,382 +538,368 @@ function ChartRenderer({ plan, data, title, subtitle }) {
         </BarChart>
       </ResponsiveContainer>
     );
-  };
+  })();
 
   return (
     <div className="chart-card">
-      <div className="chart-title">
-        <span style={{color:PALETTE[0]}}>◆</span> {title}
-      </div>
+      <div className="chart-title"><span style={{color:PALETTE[0]}}>◆</span> {title}</div>
       {subtitle && <div className="chart-sub">{subtitle}</div>}
-      <div className="chart-body">{renderChart()}</div>
+      <div className="chart-body">{chart}</div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   AGENT: DATASET PROFILER
-   Asks Claude to understand the dataset and return structured schema
-═══════════════════════════════════════════════════════════════ */
-async function profileDataset(data) {
-  const sample = data.slice(0, 10);
-  const stats  = summarise(data);
-  const prompt = `You are a data intelligence agent. Analyse this survey dataset and return a JSON profile.
+/* ═══════════════════════════════════════════════════
+   AI PROFILER  — fully dynamic, no hardcoded questions
+   Receives actual column names from the live dataset
+   and asks the AI to generate charts/stats for *this* data
+═══════════════════════════════════════════════════ */
+async function profileDataset(rows, campaignName) {
+  const cols    = introspectColumns(rows);
+  const colKeys = Object.keys(cols);
+  const sample  = rows.slice(0, 10);
 
-${SURVEY_SCHEMA}
+  // Build a plain-English column description for the prompt
+  const colDesc = colKeys.map(k => {
+    const c = cols[k];
+    if (c.kind === 'numeric')      return `"${k}" [numeric] range:${c.min}–${c.max} mean:${c.mean}`;
+    if (c.kind === 'binary')       return `"${k}" [yes/no] values:${Object.entries(c.freq).map(([v,n])=>`${v}(${n})`).join(', ')}`;
+    if (c.kind === 'categorical')  return `"${k}" [categorical ${c.unique} vals] top:${Object.entries(c.freq).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([v,n])=>`${v}(${n})`).join(', ')}`;
+    return `"${k}" [free text, ${c.unique} unique]`;
+  }).join('\n');
 
-Dataset sample (first 10 rows):
+  const prompt = `You are a survey analytics expert. Analyse this dataset and produce a JSON dashboard profile.
+
+Campaign: "${campaignName}"
+Total responses: ${rows.length}
+Columns (EXACT names you MUST use — do NOT invent or modify them):
+${colDesc}
+
+Sample rows:
 ${JSON.stringify(sample, null, 2)}
 
-Column statistics:
-${JSON.stringify(stats, null, 2)}
-
-Total rows: ${data.length}
-
-Return ONLY a JSON object with this exact shape:
+Return ONLY valid JSON — no markdown, no explanation:
 {
-  "title": "short descriptive title for this dataset",
-  "description": "1-2 sentence description of what this survey measures",
-  "columns": {
-    "<col_name>": {
-      "label": "human readable label",
-      "type": "numeric|categorical|text|likert",
-      "description": "what this column represents",
-      "isSurveyQuestion": true/false,
-      "questionNumber": null or integer
-    }
-  },
-  "suggestedInsights": [
+  "title": "descriptive campaign title",
+  "description": "1-2 sentences describing what this survey measures",
+  "keySummary": ["3-5 specific, data-driven findings as plain English sentences"],
+  "statCards": [
     {
-      "question": "natural language question this chart answers",
-      "icon": "emoji",
-      "plan": {
-        "type": "count_by|avg_by|distribution|cross_tab|concern_frequency",
-        "groupBy": "<column>",
-        "valueCol": "<column or null>",
-        "chartType": "bar|horizontal_bar|pie|donut|line",
-        "filter": null
-      },
-      "title": "chart title",
-      "subtitle": "short subtitle",
-      "minRows": <minimum number of rows needed for this chart to be meaningful>
+      "label": "short label max 4 words",
+      "valueExpr": "JavaScript expression using variable 'rows' (array of row objects with exact column names above). Must return a displayable value. Example: rows.length  or  Math.round(rows.filter(r=>String(r['ColName']).toLowerCase()==='yes').length/rows.length*100)+'%'  or  (rows.filter(r=>!isNaN(Number(r['ColName']))).reduce((s,r)=>s+Number(r['ColName']),0)/rows.filter(r=>!isNaN(Number(r['ColName']))).length).toFixed(2)",
+      "sub": "context subtitle (e.g. 'out of 5', 'of respondents', 'unique values')",
+      "color": "#b8ff57"
     }
   ],
-  "keySummary": ["3-5 key facts about the data as plain English sentences"]
+  "charts": [
+    {
+      "title": "chart title",
+      "subtitle": "short subtitle",
+      "question": "natural language insight this chart answers",
+      "icon": "relevant emoji",
+      "minRows": 3,
+      "plan": {
+        "type": "count_by | avg_by | distribution | multi_col_freq",
+        "groupBy": "EXACT column name",
+        "valueCol": "EXACT column name or null",
+        "cols": ["col1","col2"],
+        "chartType": "bar | horizontal_bar | pie | donut | line",
+        "filter": null
+      }
+    }
+  ]
 }
 
-IMPORTANT rules:
-- Use the SURVEY COLUMN DEFINITIONS above to populate the "label" and "description" fields for each column — do NOT invent or guess what Q1/Q2/Q3/Q4 mean; use the exact question text provided.
-- For suggestedInsights, only include a chart if it would be genuinely informative.
-- Provide at most 4 chart suggestions — quality over quantity.
-- For each chart set minRows: the minimum rows needed (e.g. gender breakdown needs at least 5, state breakdown needs at least 8).
-- Focus on the most impactful insights: satisfaction scores, concern frequency, voting intent, gender split.
-- Do NOT suggest a chart for every single column.`;
+RULES:
+- statCards: 4–5 cards. ALWAYS start with total respondents (valueExpr="rows.length"). Then add meaningful KPIs based on the actual columns — averages for numeric questions, yes% for binary, unique counts for text questions.
+- charts: 4–6 charts covering the most important questions. Use EXACT column names. Prefer horizontal_bar for text-heavy categoricals (5+ options), pie/donut for binary/small sets, bar for numeric distributions. For multiple related columns (e.g. multiple choice options spread across cols), use multi_col_freq with "cols" array.
+- keySummary: be specific — include real numbers from the data.
+- Choose colors from: "#b8ff57", "#57d9ff", "#ff6b8a", "#a78bfa", "#ffb347"
+- NEVER invent column names. Only use columns listed above.`;
 
-  const raw = await callAI(prompt, 'Profile this dataset and return the JSON.', 3000);
+  const raw = await callAI('Return only a valid JSON object. No markdown, no preamble.', prompt);
   return parseJSON(raw);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   AGENT: QUERY PLANNER
-   Takes a natural language question and returns an execution plan
-═══════════════════════════════════════════════════════════════ */
-async function planQuery(question, profile, data) {
-  const stats = summarise(data);
-  const concerns = runAggregation(data, {type:'concern_frequency'});
-  const system = `You are a survey data analysis agent. Your job is to answer natural language questions about a dataset accurately and concisely.
+/* ═══════════════════════════════════════════════════
+   AI QUERY PLANNER  — chat assistant
+═══════════════════════════════════════════════════ */
+async function planQuery(question, profile, rows) {
+  const cols    = introspectColumns(rows);
+  const colKeys = Object.keys(cols);
+  const colDesc = colKeys.map(k => {
+    const c = cols[k];
+    if (c.kind==='numeric')     return `"${k}": numeric (${c.min}–${c.max})`;
+    if (c.kind==='binary')      return `"${k}": yes/no — ${Object.keys(c.freq).join('/')}`;
+    if (c.kind==='categorical') return `"${k}": categorical — ${Object.keys(c.freq).slice(0,6).join(', ')}`;
+    return `"${k}": free text`;
+  }).join('\n');
 
-${SURVEY_SCHEMA}
+  const system = `You are a survey data analyst. Answer questions about this dataset.
 
-Dataset profile:
-${JSON.stringify(profile, null, 2)}
+Campaign: "${profile?.title||'Survey'}"
+Rows: ${rows.length}
+Columns (use EXACT names):
+${colDesc}
 
-Column statistics:
-${JSON.stringify(stats, null, 2)}
+Return JSON in one of two formats:
 
-Available columns with full question text:
-- Call_id: Unique call identifier
-- age: Respondent age
-- Gender: M / F / Unknown (voice-detected, not asked)
-- State: Indian state of residence
-- Q1: "How satisfied are you with the Government?" (0–5 scale)
-- Q2: "How do you think the Government has done on tackling price rise?" (0–5 scale)
-- Q3: "Will you vote for the Government?" (Yes / No)
-- Q4: "Who do you think is India's greatest sportsman?" (open answer)
-- Concern1 / Concern2 / Concern3: Top 3 national concerns chosen by respondent
-Total rows: ${data.length}
-Concern frequencies: ${JSON.stringify(concerns)}
+FACT (default — use for most questions):
+{"responseType":"fact","narrative":"Conversational answer with numbers. 2-4 sentences.","supportingData":[{"label":"...","value":"..."}]}
 
-RESPONSE RULES:
-- DEFAULT to a FACT response with a clear narrative answer. Only use a CHART response when the user explicitly asks for a chart/graph/visualisation, OR when a distribution across many categories (5+) genuinely cannot be expressed in text.
-- Never generate a chart just because a chart could be made. Answer the question in text first.
-- For most questions (averages, counts, comparisons, rankings), a FACT response is better.
+CHART (only if user asks for a chart OR distribution spans 5+ categories):
+{"responseType":"chart","narrative":"2-3 sentence explanation","plan":{"type":"count_by|avg_by|distribution|multi_col_freq","groupBy":"EXACT col","valueCol":"EXACT col or null","cols":["col1","col2"],"chartType":"bar|horizontal_bar|pie|donut|line","filter":null},"title":"chart title","subtitle":"subtitle"}
 
-You can generate two types of responses:
+Return ONLY JSON. No markdown.`;
 
-1. FACT response (DEFAULT — use this for most questions):
-{
-  "responseType": "fact",
-  "narrative": "Complete conversational answer with specific numbers, percentages and comparisons. Be precise and insightful. 3-5 sentences.",
-  "supportingData": [{"label":"...", "value":"..."}]
-}
-
-2. CHART response (only when explicitly requested or genuinely needed for many-category distributions):
-{
-  "responseType": "chart",
-  "narrative": "2-3 sentences explaining what this chart shows and the key takeaway",
-  "plan": {
-    "type": "count_by|avg_by|distribution|concern_frequency|cross_tab",
-    "groupBy": "<column>",
-    "valueCol": "<column or null>",
-    "chartType": "bar|horizontal_bar|pie|donut|line",
-    "filter": null or {"col":"<col>","op":"eq|gte|lte|contains","val":"<value>"}
-  },
-  "title": "chart title",
-  "subtitle": "short subtitle"
-}`;
-
-  const raw = await callAI(
-    system,
-    `User question: "${question}"\n\nReturn the analysis plan JSON.`,
-    1500
-  );
+  const raw = await callAI(system,
+    `Question: "${question}"\nSample: ${JSON.stringify(rows.slice(0,5))}`);
   return parseJSON(raw);
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
+   STAT CARD VALUE EVALUATOR
+   Safely runs AI-generated JS expressions against rows
+═══════════════════════════════════════════════════ */
+function evalStat(expr, rows) {
+  try {
+    // eslint-disable-next-line no-new-func
+    return new Function('rows', `"use strict"; try { return (${expr}); } catch(e) { return '—'; }`)(rows);
+  } catch { return '—'; }
+}
+
+/* ═══════════════════════════════════════════════════
    MAIN APP
-═══════════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════════════ */
 function App() {
-  const [data, setData]             = useState(SAMPLE_DATA);
-  const [profile, setProfile]       = useState(null);
-  const [profiling, setProfiling]   = useState(false);
-  const [dataSource, setDataSource] = useState('sample'); // 'live' | 'sample' | 'upload'
-  const [activeTab, setActiveTab]   = useState('dashboard');
-  const [chatHistory, setChatHistory] = useState([]);
-  const [chatInput, setChatInput]   = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [adhocCharts, setAdhocCharts] = useState([]);
-  const [dragging, setDragging]     = useState(false);
-  const fileRef = useRef();
+  const [data,            setData]            = useState([]);
+  const [colInfo,         setColInfo]         = useState({});
+  const [profile,         setProfile]         = useState(null);
+  const [profiling,       setProfiling]       = useState(false);
+  const [dataSource,      setDataSource]      = useState('none');
+  const [activeTab,       setActiveTab]       = useState('dashboard');
+  const [chatHistory,     setChatHistory]     = useState([]);
+  const [chatInput,       setChatInput]       = useState('');
+  const [chatLoading,     setChatLoading]     = useState(false);
+  const [adhocCharts,     setAdhocCharts]     = useState([]);
+  const [campaigns,       setCampaigns]       = useState([]);
+  const [activeCampaign,  setActiveCampaign]  = useState(null);
+  const [dropOpen,        setDropOpen]        = useState(false);
+  const fileRef    = useRef();
   const chatEndRef = useRef();
 
-  /* Auto-load: try live Sheet first, fall back to sample */
+  /* ── Boot ── */
   useEffect(() => {
-    (async () => {
-      const live = await loadSurveyData();
-      if (live && live.length > 0) {
-        setData(live);
-        setDataSource('live');
-        doProfile(live);
-      } else {
-        setDataSource('sample');
-        doProfile(SAMPLE_DATA);
-      }
-    })();
+    if (!getToken()) { window.location.href='/login.html'; return; }
+    fetchCampaigns().then(list => {
+      setCampaigns(list || []);
+      const first = (list||[]).find(c=>c.status==='active') || list?.[0];
+      if (first) loadCampaign(first);
+    });
   }, []);
 
-  /* Scroll chat to bottom */
   useEffect(() => { chatEndRef.current?.scrollIntoView({behavior:'smooth'}); }, [chatHistory]);
 
-  async function doProfile(rows) {
+  /* ── Load & profile a campaign ── */
+  async function loadCampaign(campaign) {
+    setActiveCampaign(campaign);
+    setDropOpen(false);
+    setProfile(null); setAdhocCharts([]); setChatHistory([]); setData([]);
+    setDataSource('loading');
+
+    const raw = await fetchCampaignData(campaign.id);
+    if (raw && raw.length) {
+      const cleaned = cleanRows(raw);
+      setData(cleaned);
+      setColInfo(introspectColumns(cleaned));
+      setDataSource('live');
+      await runProfile(cleaned, campaign.name);
+    } else {
+      setDataSource('empty');
+      setProfile({title:campaign.name, description:'No responses collected yet.',
+        keySummary:['No survey responses have been collected yet for this campaign.'],
+        statCards:[], charts:[]});
+    }
+  }
+
+  async function runProfile(rows, name) {
     setProfiling(true);
     try {
-      const p = await profileDataset(rows);
-      if (p) setProfile(p);
-      else setProfile({title:'Survey Dataset',description:'Survey data loaded.',suggestedInsights:[],keySummary:[],columns:{}});
+      const p = await profileDataset(rows, name);
+      setProfile(p || fallbackProfile(name));
     } catch(e) {
-      console.error(e);
-      setProfile({title:'Survey Dataset',description:'Could not auto-profile. API key may be needed.',suggestedInsights:[],keySummary:[],columns:{}});
+      console.error('Profile error:', e);
+      setProfile(fallbackProfile(name));
     }
     setProfiling(false);
   }
 
-  /* ── File upload — CSV, JSON, XLSX ── */
+  function fallbackProfile(name) {
+    return {title:name||'Survey', description:'Data loaded.', keySummary:[],
+            statCards:[{label:'Total Respondents',valueExpr:'rows.length',sub:'responses',color:'#b8ff57'}],
+            charts:[]};
+  }
+
+  /* ── File upload ── */
   function handleFile(file) {
     if (!file) return;
     const ext = file.name.split('.').pop().toLowerCase();
-
-    const loadRows = (rawRows) => {
-      // Normalise then clean: remove declined calls and junk rows
-      const rows = cleanData(
-        rawRows
-          .filter(r => Object.values(r).some(v => v !== null && v !== '' && v !== undefined))
-          .map(normaliseRow)
-      );
-      setData(rows); setDataSource('upload');
-      setProfile(null); setAdhocCharts([]); setChatHistory([]);
-      doProfile(rows);
+    const onRows = rawRows => {
+      const cleaned = cleanRows(rawRows.filter(r=>Object.values(r).some(v=>v!=null&&v!=='')));
+      setData(cleaned); setColInfo(introspectColumns(cleaned));
+      setDataSource('upload'); setProfile(null); setAdhocCharts([]); setChatHistory([]);
+      runProfile(cleaned, file.name.replace(/\.[^.]+$/,''));
     };
-
-    if (ext === 'csv') {
-      Papa.parse(file, {
-        header: true, skipEmptyLines: true, dynamicTyping: false,
-        transformHeader: h => h.trim(),
-        complete: (r) => loadRows(r.data)
-      });
-    } else if (ext === 'xlsx' || ext === 'xls') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const XLSX = window.XLSX || window.SheetJS;
-          if (!XLSX) { alert('SheetJS not loaded — please refresh'); return; }
-          const wb = XLSX.read(e.target.result, { type: 'array' });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const rawXlsx = XLSX.utils.sheet_to_json(ws, { defval: '' });
-          // Trim whitespace from all keys (XLSX can have trailing spaces too)
-          const raw = rawXlsx.map(row => {
-            const clean = {};
-            Object.keys(row).forEach(k => { clean[k.trim()] = row[k]; });
-            return clean;
-          });
-          loadRows(raw);
-        } catch(err) { alert('Could not parse Excel file: ' + err.message); }
+    if (ext==='csv') {
+      Papa.parse(file,{header:true,skipEmptyLines:true,dynamicTyping:false,
+        transformHeader:h=>h.trim(), complete:r=>onRows(r.data)});
+    } else if (ext==='xlsx'||ext==='xls') {
+      const rd = new FileReader();
+      rd.onload = e => {
+        const X = window.XLSX||window.SheetJS;
+        const wb = X.read(e.target.result,{type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        onRows(X.utils.sheet_to_json(ws,{defval:''}).map(row=>{
+          const c={}; Object.keys(row).forEach(k=>{c[k.trim()]=row[k];}); return c;
+        }));
       };
-      reader.readAsArrayBuffer(file);
-    } else if (ext === 'json') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const parsed = JSON.parse(e.target.result);
-          const raw = Array.isArray(parsed) ? parsed : parsed.data || Object.values(parsed)[0];
-          loadRows(raw);
-        } catch { alert('Invalid JSON'); }
-      };
-      reader.readAsText(file);
-    } else {
-      alert('Supported formats: .xlsx, .xls, .csv, .json');
-    }
-  }
-
-  /* ── Refresh live data from Sheet ── */
-  async function refreshLiveData() {
-    const live = await loadSurveyData();
-    if (live && live.length > 0) {
-      setData(live); setDataSource('live');
-      setProfile(null); setAdhocCharts([]); setChatHistory([]);
-      doProfile(live);
+      rd.readAsArrayBuffer(file);
+    } else if (ext==='json') {
+      const rd = new FileReader();
+      rd.onload = e => { try { onRows(JSON.parse(e.target.result)); } catch{ alert('Invalid JSON'); }};
+      rd.readAsText(file);
     }
   }
 
   /* ── Chat ── */
   async function sendChat(text) {
-    if (!text.trim() || chatLoading || !profile) return;
-    const question = text.trim();
+    if (!text.trim()||chatLoading||!profile) return;
+    const q = text.trim();
     setChatInput('');
     setChatLoading(true);
-
-    const userMsg = {role:'user', text:question, time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})};
-    setChatHistory(h => [...h, userMsg]);
-
+    const time = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    setChatHistory(h=>[...h,{role:'user',text:q,time}]);
     try {
-      const result = await planQuery(question, profile, data);
-      if (!result) throw new Error('No plan returned');
-
-      if (result.responseType === 'chart') {
-        const chartId = Date.now();
-        setAdhocCharts(c => [...c, {id:chartId, plan:result.plan, title:result.title, subtitle:result.subtitle}]);
-        const botMsg = {
-          role:'bot', time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
-          text: result.narrative,
-          chartRef: {id:chartId, title:result.title}
-        };
-        setChatHistory(h => [...h, botMsg]);
-        if (activeTab !== 'analysis') setActiveTab('analysis');
+      const result = await planQuery(q, profile, data);
+      if (!result) throw new Error('No response');
+      if (result.responseType==='chart') {
+        const id = Date.now();
+        setAdhocCharts(c=>[...c,{id,plan:result.plan,title:result.title,subtitle:result.subtitle}]);
+        setChatHistory(h=>[...h,{role:'bot',time,text:result.narrative,chartRef:{id,title:result.title}}]);
+        setActiveTab('analysis');
       } else {
-        const botMsg = {
-          role:'bot', time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),
-          text: result.narrative,
-          facts: result.supportingData
-        };
-        setChatHistory(h => [...h, botMsg]);
+        setChatHistory(h=>[...h,{role:'bot',time,text:result.narrative,facts:result.supportingData}]);
       }
     } catch(e) {
-      setChatHistory(h => [...h, {role:'bot', text:`Sorry, I couldn't process that question. ${e.message}`, time:''}]);
+      setChatHistory(h=>[...h,{role:'bot',text:`Sorry, couldn't process that. ${e.message}`,time:''}]);
     }
     setChatLoading(false);
   }
 
-  /* ── Stats summary ── */
-  const stats = useMemo(() => {
-    if (!data.length) return {};
-    const avgAge = (data.reduce((a,r)=>a+Number(r.age||r.Age||0),0)/data.length).toFixed(1);
-    const voteYes = data.filter(r=>String(r.Q3||r.q3||'').toLowerCase()==='yes').length;
-    const q1vals = data.map(r=>r.Q1).filter(v=>v!==null&&v!==undefined&&!isNaN(Number(v)));
-  const avgQ1   = q1vals.length ? (q1vals.reduce((a,b)=>a+Number(b),0)/q1vals.length).toFixed(2) : 'N/A';
-    const states  = new Set(data.map(r=>r.State||r.state)).size;
-    return {n:data.length, avgAge, voteYes, pctYes:((voteYes/data.length)*100).toFixed(0), avgQ1, states};
-  }, [data]);
+  /* ── Dynamic stat cards (AI-generated expressions) ── */
+  const statCards = useMemo(() => {
+    if (!profile?.statCards?.length || !data.length) return [];
+    return profile.statCards.map((card,i) => ({
+      ...card,
+      computed: evalStat(card.valueExpr, data),
+      color: card.color || PALETTE[i % PALETTE.length]
+    }));
+  }, [profile, data]);
 
-  const suggestions = profile?.suggestedInsights?.slice(0,3).map(s=>s.question) || [
-    'Which state has the highest satisfaction?',
-    'How do women rate govt performance?',
-    'What are the top concerns?'
+  const suggestions = profile?.charts?.slice(0,3).map(c=>c.question) || [
+    'What are the most common responses?',
+    'Show a breakdown by question',
+    'What patterns do you see in the data?'
   ];
 
-  /* ── Render ── */
+  const campaignName = activeCampaign?.name || 'Campaign Analytics';
+
+  /* ═══ RENDER ═══ */
   return (
     <>
-    {/* HEADER */}
+    {/* ── HEADER ── */}
     <div className="hdr">
       <div className="hdr-brand">
         <div className="hdr-pip">📊</div>
         <div>
-          <div className="hdr-title">Survey <span>Intelligence</span></div>
+          <div className="hdr-title">Campaign <span>Analytics</span></div>
           {profile && <div className="hdr-meta">{profile.title}</div>}
         </div>
       </div>
       <div className="hdr-right">
-        {profiling
-          ? <span className="chip chip-lime"><span className="spin"></span>Profiling dataset…</span>
-          : profile
-            ? <span className="chip chip-lime">✦ AI Profiled</span>
-            : null
-        }
-        {dataSource === 'live'
-          ? <span className="chip chip-cyan">🔴 Live — {stats.n || 0} responses</span>
-          : dataSource === 'upload'
-            ? <span className="chip chip-cyan">📁 Uploaded — {stats.n || 0} rows</span>
-            : <span className="chip chip-fog">🧪 Sample — {stats.n || 0} rows</span>
-        }
-        {dataSource === 'live' && (
-          <button className="chip chip-fog" style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.1)',fontFamily:'inherit'}}
-            onClick={refreshLiveData}>
-            ↻ Refresh
-          </button>
+
+        {/* Campaign dropdown */}
+        {campaigns.length > 0 && (
+          <div style={{position:'relative'}}>
+            <button className="chip chip-fog"
+              style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.15)',fontFamily:'inherit'}}
+              onClick={()=>setDropOpen(o=>!o)}>
+              📋 {activeCampaign?.name || 'Select Campaign'} ▾
+            </button>
+            {dropOpen && (
+              <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:'#1a1a24',
+                border:'1px solid rgba(255,255,255,.12)',borderRadius:10,padding:6,
+                minWidth:230,zIndex:200,boxShadow:'0 8px 32px rgba(0,0,0,.6)'}}>
+                <div style={{padding:'4px 10px',fontSize:10,fontWeight:700,letterSpacing:'.08em',
+                  color:'#6b6b8a',textTransform:'uppercase',marginBottom:4}}>Campaigns</div>
+                {campaigns.map(c=>(
+                  <button key={c.id} onClick={()=>loadCampaign(c)}
+                    style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',
+                      borderRadius:7,border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:13,
+                      background:activeCampaign?.id===c.id?'rgba(184,255,87,.1)':'transparent',
+                      color:activeCampaign?.id===c.id?'#b8ff57':'#9494b0'}}>
+                    <span style={{fontSize:9,marginRight:6,
+                      color:c.status==='active'?'#b8ff57':c.status==='draft'?'#ffb347':'#6b6b8a'}}>●</span>
+                    {activeCampaign?.id===c.id?'✓ ':''}{c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
-        <button className="chip chip-fog" style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.1)',fontFamily:'inherit'}}
-          onClick={()=>fileRef.current.click()}>
-          ↑ Upload Excel / CSV
-        </button>
+
+        {profiling
+          ? <span className="chip chip-lime"><span className="spin"></span> AI Profiling…</span>
+          : profile ? <span className="chip chip-lime">✦ Profiled</span> : null}
+
+        {dataSource==='live'   && <span className="chip chip-cyan">🔴 Live — {data.length} responses</span>}
+        {dataSource==='upload' && <span className="chip chip-cyan">📁 Uploaded — {data.length} rows</span>}
+        {dataSource==='empty'  && <span className="chip chip-fog">📭 No responses yet</span>}
+        {dataSource==='loading'&& <span className="chip chip-fog"><span className="spin"></span> Loading…</span>}
+
+        {dataSource==='live' && (
+          <button className="chip chip-fog"
+            style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.1)',fontFamily:'inherit'}}
+            onClick={()=>activeCampaign&&loadCampaign(activeCampaign)}>↻ Refresh</button>
+        )}
+        <button className="chip chip-fog"
+          style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.1)',fontFamily:'inherit'}}
+          onClick={()=>fileRef.current.click()}>↑ Upload CSV / Excel</button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.json" style={{display:'none'}}
           onChange={e=>handleFile(e.target.files[0])}/>
-        <a href="/client" style={{textDecoration:'none'}}>
-          <span className="chip" style={{
-            background:'linear-gradient(135deg,rgba(184,255,87,0.15),rgba(87,217,255,0.1))',
-            color:'#b8ff57',border:'1px solid rgba(184,255,87,0.3)',cursor:'pointer',
-          }}>
-            🎙 Survey Agent →
-          </span>
+        <a href="/client.html" style={{textDecoration:'none'}}>
+          <span className="chip" style={{background:'linear-gradient(135deg,rgba(184,255,87,0.15),rgba(87,217,255,0.1))',
+            color:'#b8ff57',border:'1px solid rgba(184,255,87,0.3)',cursor:'pointer'}}>🎙 Agent →</span>
         </a>
-        <img
-          src="/static/M2T_LOGO.png"
-          alt="Company Logo"
-          className="company-logo"
-          onError={e => e.target.style.display='none'}
-        />
+        <a href="/admin.html" style={{textDecoration:'none'}}>
+          <span className="chip chip-fog" style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.1)'}}>⚙️ Admin</span>
+        </a>
+        <button className="chip chip-fog"
+          style={{cursor:'pointer',border:'1px solid rgba(255,255,255,.1)',fontFamily:'inherit'}}
+          onClick={()=>{localStorage.removeItem('token');localStorage.removeItem('user');window.location.href='/login.html';}}>
+          Sign out
+        </button>
+        <img src="/static/M2T_LOGO.png" alt="" className="company-logo" onError={e=>e.target.style.display='none'}/>
       </div>
     </div>
 
     <div className="shell">
-      {/* ─── MAIN PANEL ─── */}
+      {/* ── MAIN ── */}
       <div className="main">
 
-        {/* Tabs */}
         <div className="tabs">
           {['dashboard','analysis','data'].map(t=>(
-            <button key={t} className={`tab${activeTab===t?' active':''}`}
-              onClick={()=>setActiveTab(t)}>
+            <button key={t} className={`tab${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)}>
               {t==='dashboard'?'📊 Dashboard':t==='analysis'?'🔍 AI Analysis':'🗂 Raw Data'}
             </button>
           ))}
@@ -1098,58 +908,105 @@ function App() {
         {/* ── DASHBOARD TAB ── */}
         {activeTab==='dashboard' && (
           <>
-          {/* Stat row */}
-          <div className="stat-grid">
-            {[
-              {label:'Total Respondents',val:stats.n,sub:'survey entries',color:'#b8ff57',glow:'rgba(184,255,87,0.08)'},
-              {label:'Avg Age',val:stats.avgAge,sub:'years old',color:'#57d9ff',glow:'rgba(87,217,255,0.08)'},
-              {label:'Vote for Govt',val:`${stats.pctYes}%`,sub:`${stats.voteYes} of ${stats.n}`,color:'#a78bfa',glow:'rgba(167,139,250,0.08)'},
-              {label:'Avg Satisfaction',val:stats.avgQ1,sub:'out of 5',color:'#ffb347',glow:'rgba(255,179,71,0.08)'},
-              {label:'States Covered',val:stats.states,sub:'unique states',color:'#ff6b8a',glow:'rgba(255,107,138,0.08)'},
-            ].map(s=>(
-              <div key={s.label} className="stat-card" style={{'--glow-c':s.glow}}>
-                <div className="stat-label">{s.label}</div>
-                <div className="stat-val" style={{color:s.color}}>{s.val}</div>
-                <div className="stat-sub">{s.sub}</div>
-              </div>
-            ))}
-          </div>
+          {/* Empty / loading states */}
+          {dataSource==='empty' && (
+            <div className="empty">
+              <div className="empty-icon">📭</div>
+              <div className="empty-text">No responses collected yet for <strong style={{color:'#b8ff57'}}>{campaignName}</strong>.<br/>Run the survey agent to start collecting data.</div>
+            </div>
+          )}
+          {dataSource==='loading' && (
+            <div className="empty">
+              <div className="empty-icon" style={{fontSize:32}}><span className="spin" style={{width:40,height:40,borderWidth:3}}/></div>
+              <div className="empty-text" style={{marginTop:16}}>Loading campaign data…</div>
+            </div>
+          )}
+          {dataSource==='none' && (
+            <div className="empty">
+              <div className="empty-icon">📋</div>
+              <div className="empty-text">Select a campaign from the dropdown above<br/>or upload a data file to get started.</div>
+            </div>
+          )}
 
-          {/* AI summary */}
-          {profile?.keySummary?.length > 0 && (
+          {/* ── Dynamic stat cards — AI picks what's meaningful for THIS dataset ── */}
+          {statCards.length > 0 && (
+            <div className="stat-grid">
+              {statCards.map((s,i)=>(
+                <div key={i} className="stat-card" style={{'--glow-c':s.color+'1a'}}>
+                  <div className="stat-label">{s.label}</div>
+                  <div className="stat-val" style={{color:s.color}}>{String(s.computed)}</div>
+                  {s.sub && <div className="stat-sub">{s.sub}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Skeleton stat cards while profiling */}
+          {data.length>0 && statCards.length===0 && profiling && (
+            <div className="stat-grid">
+              {[0,1,2,3].map(i=>(
+                <div key={i} className="stat-card">
+                  <div className="stat-label" style={{width:80,height:10,background:'#32324a',borderRadius:4}}/>
+                  <div style={{width:60,height:28,background:'#32324a',borderRadius:4,marginTop:8}}/>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Fallback: always show total respondents if data is loaded */}
+          {data.length>0 && statCards.length===0 && !profiling && (
+            <div className="stat-grid">
+              <div className="stat-card" style={{'--glow-c':'rgba(184,255,87,0.08)'}}>
+                <div className="stat-label">Total Respondents</div>
+                <div className="stat-val" style={{color:'#b8ff57'}}>{data.length}</div>
+                <div className="stat-sub">responses collected</div>
+              </div>
+            </div>
+          )}
+
+          {/* Campaign description from AI */}
+          {profile?.description && data.length>0 && (
+            <div style={{marginBottom:16,padding:'12px 16px',
+              background:'rgba(87,217,255,0.05)',border:'1px solid rgba(87,217,255,0.1)',
+              borderRadius:10,fontSize:13,color:'#9494b0',lineHeight:1.7}}>
+              {profile.description}
+            </div>
+          )}
+
+          {/* AI Key Findings */}
+          {profile?.keySummary?.length>0 && data.length>0 && (
             <div className="card" style={{marginBottom:20}}>
               <div className="sec-hdr" style={{marginBottom:12}}>
                 <div className="sec-title" style={{fontSize:13}}>
-                  <span className="sec-title-dot" style={{background:'#a78bfa'}}></span>
-                  AI Key Findings
+                  <span className="sec-title-dot" style={{background:'#a78bfa'}}></span> AI Key Findings
                 </div>
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {profile.keySummary.map((s,i)=>(
-                  <div key={i} style={{display:'flex',gap:10,fontSize:13,lineHeight:1.6,color:'#c4c4d8',padding:'8px 12px',background:'rgba(167,139,250,0.06)',borderRadius:8,border:'1px solid rgba(167,139,250,0.12)'}}>
-                    <span style={{color:'#a78bfa',flexShrink:0}}>◆</span>
-                    {s}
+                  <div key={i} style={{display:'flex',gap:10,fontSize:13,lineHeight:1.6,color:'#c4c4d8',
+                    padding:'8px 12px',background:'rgba(167,139,250,0.06)',
+                    borderRadius:8,border:'1px solid rgba(167,139,250,0.12)'}}>
+                    <span style={{color:'#a78bfa',flexShrink:0}}>◆</span>{s}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Suggested insight chips */}
-          {profile?.suggestedInsights?.length > 0 && (
+          {/* Quick insight chips — clickable, send to chat */}
+          {profile?.charts?.length>0 && data.length>0 && (
             <div style={{marginBottom:20}}>
               <div className="sec-hdr" style={{marginBottom:12}}>
                 <div className="sec-title" style={{fontSize:13}}>
                   <span className="sec-title-dot" style={{background:'#b8ff57'}}></span>
-                  Quick Insights — click to explore
+                  Explore Insights — click to ask the AI
                 </div>
               </div>
               <div className="insight-list">
-                {profile.suggestedInsights.slice(0,6).map((ins,i)=>(
-                  <div key={i} className="insight-item"
-                    onClick={()=>{sendChat(ins.question);}}>
-                    <span className="insight-icon">{ins.icon||'📊'}</span>
-                    <span>{ins.question}</span>
+                {profile.charts.slice(0,6).map((c,i)=>(
+                  <div key={i} className="insight-item" onClick={()=>sendChat(c.question)}>
+                    <span className="insight-icon">{c.icon||'📊'}</span>
+                    <span>{c.question}</span>
                     <span style={{marginLeft:'auto',color:'#b8ff57',fontSize:12}}>→</span>
                   </div>
                 ))}
@@ -1157,33 +1014,30 @@ function App() {
             </div>
           )}
 
-          {/* Auto-generated charts from profile — only show when data is sufficient */}
-          {profile?.suggestedInsights?.length > 0 && (() => {
-            const eligibleCharts = profile.suggestedInsights.filter(ins =>
-              data.length >= (ins.minRows || 5)
-            );
-            if (eligibleCharts.length === 0) return null;
-            return (
-              <>
-              <div className="sec-hdr" style={{marginBottom:16}}>
-                <div className="sec-title" style={{fontSize:13}}>
-                  <span className="sec-title-dot" style={{background:'#57d9ff'}}></span>
-                  Key Visualisations
-                </div>
+          {/* ── Auto charts: AI-selected, data-driven, specific to this campaign ── */}
+          {profile?.charts?.length>0 && data.length>=3 && (
+            <>
+            <div className="sec-hdr" style={{marginBottom:16}}>
+              <div className="sec-title" style={{fontSize:13}}>
+                <span className="sec-title-dot" style={{background:'#57d9ff'}}></span>
+                Key Visualisations
               </div>
-              <div className="chart-grid">
-                {eligibleCharts.slice(0,4).map((ins,i)=>(
-                  <ChartRenderer key={i} plan={ins.plan} data={data} title={ins.title} subtitle={ins.subtitle}/>
+            </div>
+            <div className="chart-grid">
+              {profile.charts
+                .filter(c => data.length >= (c.minRows||3))
+                .slice(0,6)
+                .map((c,i) => (
+                  <ChartRenderer key={i} plan={c.plan} data={data} title={c.title} subtitle={c.subtitle}/>
                 ))}
-              </div>
-              </>
-            );
-          })()}
+            </div>
+            </>
+          )}
 
-          {profiling && (
+          {profiling && data.length>0 && (
             <div className="gen-indicator">
               <span className="spin"></span>
-              AI is analysing your dataset and generating visualisations…
+              AI is analysing <strong>{campaignName}</strong> and generating tailored visualisations…
             </div>
           )}
           </>
@@ -1197,13 +1051,13 @@ function App() {
               <span className="sec-title-dot" style={{background:'#57d9ff'}}></span>
               AI-Generated Analysis Charts
             </div>
-            <span style={{fontSize:12,color:'#6b6b8a'}}>Ask questions in the chat to add charts →</span>
+            <span style={{fontSize:12,color:'#6b6b8a'}}>Ask questions in the chat →</span>
           </div>
-          {adhocCharts.length === 0 ? (
+          {adhocCharts.length===0 ? (
             <div className="empty">
               <div className="empty-icon">🔍</div>
-              <div className="empty-text">Ask a question in the chat panel to generate analysis charts.<br/>
-              Try: <em>"Which state has the lowest satisfaction?"</em> or <em>"Show concern breakdown by gender"</em></div>
+              <div className="empty-text">Ask a question in the chat panel to generate charts.<br/>
+                Try: <em>"Show breakdown by gender"</em> or <em>"What's the average score?"</em></div>
             </div>
           ) : (
             <div className="chart-grid">
@@ -1217,25 +1071,27 @@ function App() {
 
         {/* ── RAW DATA TAB ── */}
         {activeTab==='data' && (
-          <>
-          <div style={{overflowX:'auto',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12}}>
-            <table className="data-table">
-              <thead>
-                <tr>{Object.keys(data[0]||{}).map(k=><th key={k}>{k}</th>)}</tr>
-              </thead>
-              <tbody>
-                {data.slice(0,50).map((r,i)=>(
-                  <tr key={i}>{Object.values(r).map((v,j)=><td key={j}>{String(v??'')}</td>)}</tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {data.length>50 && <div style={{textAlign:'center',padding:'12px',fontSize:12,color:'#6b6b8a'}}>Showing 50 of {data.length} rows</div>}
-          </>
+          data.length===0 ? (
+            <div className="empty"><div className="empty-icon">🗂</div><div className="empty-text">No data loaded</div></div>
+          ) : (
+            <>
+            <div style={{overflowX:'auto',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12}}>
+              <table className="data-table">
+                <thead><tr>{Object.keys(data[0]).map(k=><th key={k}>{k}</th>)}</tr></thead>
+                <tbody>
+                  {data.slice(0,100).map((r,i)=>(
+                    <tr key={i}>{Object.values(r).map((v,j)=><td key={j}>{String(v??'')}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {data.length>100 && <div style={{textAlign:'center',padding:'12px',fontSize:12,color:'#6b6b8a'}}>Showing 100 of {data.length} rows</div>}
+            </>
+          )
         )}
       </div>
 
-      {/* ─── CHAT SIDEBAR ─── */}
+      {/* ── CHAT SIDEBAR ── */}
       <div className="sidebar">
         <div className="chat-panel">
           <div className="chat-hdr">
@@ -1243,28 +1099,28 @@ function App() {
             <div>
               <div className="chat-hdr-text">Data Assistant</div>
               <div className="chat-hdr-sub">
-                {profile ? 'Ready to answer questions' : 'Loading dataset profile…'}
+                {profiling ? 'Profiling dataset…' : profile ? `${data.length} responses · ${Object.keys(colInfo).length} columns` : 'Select a campaign'}
               </div>
             </div>
           </div>
 
           <div className="chat-msgs">
-            {chatHistory.length === 0 && (
-              <div style={{padding:'16px 0',textAlign:'center',color:'#6b6b8a',fontSize:13,lineHeight:1.8}}>
+            {chatHistory.length===0 && (
+              <div style={{padding:'20px 0',textAlign:'center',color:'#6b6b8a',fontSize:13,lineHeight:1.8}}>
                 <div style={{fontSize:32,marginBottom:12}}>💬</div>
-                Ask me anything about the survey data.<br/>
-                I'll generate charts, compute statistics,<br/>
-                and give you narrative insights.
+                Ask anything about <strong style={{color:'#9494b0'}}>{campaignName}</strong>.<br/>
+                I know every question and every answer in this dataset.
               </div>
             )}
             {chatHistory.map((m,i)=>(
               <div key={i} className={`msg-bubble ${m.role}`}>
                 <div className="bubble-content">
                   {m.text}
-                  {m.facts && m.facts.length > 0 && (
+                  {m.facts?.length>0 && (
                     <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:4}}>
                       {m.facts.map((f,j)=>(
-                        <div key={j} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid rgba(255,255,255,0.08)',fontSize:12}}>
+                        <div key={j} style={{display:'flex',justifyContent:'space-between',
+                          padding:'4px 0',borderBottom:'1px solid rgba(255,255,255,0.08)',fontSize:12}}>
                           <span style={{color:'#9494b0'}}>{f.label}</span>
                           <span style={{fontWeight:600,color:'#b8ff57'}}>{f.value}</span>
                         </div>
@@ -1272,9 +1128,10 @@ function App() {
                     </div>
                   )}
                   {m.chartRef && (
-                    <div style={{marginTop:10,padding:'6px 10px',background:'rgba(87,217,255,0.08)',borderRadius:6,fontSize:11,color:'#57d9ff',cursor:'pointer'}}
+                    <div style={{marginTop:10,padding:'6px 10px',background:'rgba(87,217,255,0.08)',
+                      borderRadius:6,fontSize:11,color:'#57d9ff',cursor:'pointer'}}
                       onClick={()=>setActiveTab('analysis')}>
-                      📊 Chart generated → {m.chartRef.title}
+                      📊 Chart → {m.chartRef.title}
                     </div>
                   )}
                 </div>
@@ -1284,7 +1141,7 @@ function App() {
             {chatLoading && (
               <div className="msg-bubble bot">
                 <div className="bubble-content" style={{display:'flex',alignItems:'center',gap:8,color:'#6b6b8a'}}>
-                  <span className="spin"></span> Analysing your question…
+                  <span className="spin"></span> Thinking…
                 </div>
               </div>
             )}
@@ -1298,19 +1155,13 @@ function App() {
               ))}
             </div>
             <div className="chat-input-row">
-              <input
-                className="chat-input"
-                value={chatInput}
+              <input className="chat-input" value={chatInput}
                 onChange={e=>setChatInput(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&sendChat(chatInput)}
-                placeholder={profile ? "Ask about the data…" : "Profiling dataset…"}
-                disabled={!profile||chatLoading}
-              />
-              <button className="send-btn"
-                onClick={()=>sendChat(chatInput)}
-                disabled={!profile||chatLoading||!chatInput.trim()}>
-                ↑
-              </button>
+                placeholder={profile?`Ask about ${campaignName}…`:'Load a campaign first…'}
+                disabled={!profile||chatLoading}/>
+              <button className="send-btn" onClick={()=>sendChat(chatInput)}
+                disabled={!profile||chatLoading||!chatInput.trim()}>↑</button>
             </div>
           </div>
         </div>

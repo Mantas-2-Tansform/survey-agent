@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Admin — Campaign Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --ink:#0d0d12;--ink-2:#1a1a24;--ink-3:#252533;--ink-4:#32324a;
+  --wire:rgba(255,255,255,0.07);--wire-2:rgba(255,255,255,0.12);
+  --fog:#6b6b8a;--mist:#9494b0;--snow:#e8e8f0;--white:#f5f5fa;
+  --lime:#b8ff57;--lime-dim:rgba(184,255,87,0.1);
+  --cyan:#57d9ff;--cyan-dim:rgba(87,217,255,0.1);
+  --rose:#ff6b8a;--rose-dim:rgba(255,107,138,0.1);
+  --amber:#ffb347;--amber-dim:rgba(255,179,71,0.1);
+  --violet:#a78bfa;--violet-dim:rgba(167,139,250,0.1);
+  --r:8px;--r-lg:14px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--ink);color:var(--snow);min-height:100vh;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--ink-4);border-radius:4px;}
+
+/* ── Header ── */
+.hdr{
+  border-bottom:1px solid var(--wire);padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+  background:rgba(13,13,18,.9);backdrop-filter:blur(16px);
+}
+.hdr-brand{display:flex;align-items:center;gap:12px;}
+.pip{width:36px;height:36px;border-radius:10px;background:var(--lime);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--ink);}
+.hdr-title{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;}
+.hdr-title span{color:var(--lime);}
+.hdr-right{display:flex;align-items:center;gap:10px;}
+.chip{padding:5px 13px;border-radius:999px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;}
+.chip-lime{background:var(--lime-dim);color:var(--lime);border-color:rgba(184,255,87,.25);}
+.chip-fog{background:rgba(107,107,138,.15);color:var(--mist);border-color:var(--wire-2);cursor:pointer;}
+.chip-rose{background:var(--rose-dim);color:var(--rose);border-color:rgba(255,107,138,.25);}
+
+/* ── Layout ── */
+.shell{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 57px);}
+.sidebar{border-right:1px solid var(--wire);padding:20px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.main{padding:24px 28px;overflow-y:auto;}
+
+/* ── Sidebar nav ── */
+.nav-section{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--fog);text-transform:uppercase;padding:8px 10px 4px;}
+.nav-btn{
+  width:100%;text-align:left;padding:9px 12px;border-radius:var(--r);
+  background:transparent;border:none;color:var(--mist);
+  font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;
+  display:flex;align-items:center;gap:10px;transition:background .15s,color .15s;
+}
+.nav-btn:hover{background:var(--ink-3);color:var(--snow);}
+.nav-btn.active{background:var(--lime-dim);color:var(--lime);}
+.nav-btn .badge{margin-left:auto;background:var(--ink-4);border-radius:99px;padding:1px 7px;font-size:10px;color:var(--fog);}
+
+/* ── Campaigns list ── */
+.campaign-list{display:flex;flex-direction:column;gap:10px;}
+.campaign-card{
+  background:var(--ink-2);border:1px solid var(--wire);border-radius:var(--r-lg);
+  padding:16px 18px;cursor:pointer;transition:border-color .2s,box-shadow .2s;
+}
+.campaign-card:hover{border-color:var(--wire-2);box-shadow:0 4px 16px rgba(0,0,0,.3);}
+.campaign-card.selected{border-color:var(--lime);box-shadow:0 0 0 1px var(--lime);}
+.c-name{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:4px;}
+.c-desc{font-size:12px;color:var(--fog);line-height:1.4;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.c-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.status-badge{padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;}
+.status-active{background:rgba(184,255,87,.15);color:var(--lime);}
+.status-draft{background:var(--amber-dim);color:var(--amber);}
+.status-closed{background:rgba(107,107,138,.2);color:var(--fog);}
+.c-stat{font-size:11px;color:var(--fog);font-family:'DM Mono',monospace;}
+
+/* ── Section headers ── */
+.section-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:20px;
+}
+.section-title{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;}
+.section-sub{font-size:13px;color:var(--fog);margin-top:2px;}
+
+/* ── Buttons ── */
+.btn{
+  padding:9px 18px;border-radius:var(--r);border:none;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  transition:opacity .15s,transform .1s;
+}
+.btn:active{transform:scale(.97);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-lime{background:var(--lime);color:var(--ink);}
+.btn-ghost{background:transparent;color:var(--mist);border:1px solid var(--wire-2);}
+.btn-ghost:hover{border-color:var(--wire-2);background:var(--ink-3);}
+.btn-rose{background:var(--rose-dim);color:var(--rose);border:1px solid rgba(255,107,138,.25);}
+.btn-cyan{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(87,217,255,.25);}
+.btn-amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,179,71,.25);}
+
+/* ── Forms ── */
+.form-grid{display:grid;gap:16px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--mist);margin-bottom:6px;letter-spacing:.02em;}
+input,textarea,select{
+  width:100%;background:var(--ink-3);border:1px solid var(--wire-2);
+  border-radius:var(--r);padding:10px 14px;
+  font-size:13px;color:var(--white);font-family:'DM Sans',sans-serif;
+  outline:none;transition:border-color .2s,box-shadow .2s;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--lime);box-shadow:0 0 0 2px rgba(184,255,87,.1);}
+select option{background:var(--ink-3);}
+textarea{resize:vertical;min-height:80px;}
+
+/* ── Panel cards ── */
+.panel{
+  background:var(--ink-2);border:1px solid var(--wire);
+  border-radius:var(--r-lg);padding:22px 24px;margin-bottom:20px;
+}
+.panel-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.panel-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;}
+.panel-sub{font-size:12px;color:var(--fog);margin-top:2px;}
+
+/* ── Question list ── */
+.q-list{display:flex;flex-direction:column;gap:10px;}
+.q-item{
+  background:var(--ink-3);border:1px solid var(--wire);
+  border-radius:var(--r);padding:14px 16px;
+  display:flex;align-items:flex-start;gap:12px;
+  transition:box-shadow .2s,opacity .2s;
+}
+.q-item.dragging{opacity:.4;box-shadow:none;}
+.q-item.drag-over{border-color:var(--lime);box-shadow:0 0 0 1px var(--lime);}
+.q-drag-handle{
+  cursor:grab;color:var(--fog);font-size:16px;
+  flex-shrink:0;padding:2px 4px;line-height:1;
+  user-select:none;margin-top:2px;
+}
+.q-drag-handle:active{cursor:grabbing;}
+.q-num{
+  width:28px;height:28px;border-radius:6px;
+  background:var(--lime-dim);color:var(--lime);
+  font-family:'DM Mono',monospace;font-size:12px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.q-body{flex:1;}
+.q-text{font-size:14px;font-weight:500;line-height:1.4;margin-bottom:6px;}
+.q-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.q-type{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;}
+.qt-scale{background:var(--violet-dim);color:var(--violet);}
+.qt-multiple_choice{background:var(--cyan-dim);color:var(--cyan);}
+.qt-yes_no{background:var(--lime-dim);color:var(--lime);}
+.qt-numeric{background:var(--amber-dim);color:var(--amber);}
+.qt-open_text{background:rgba(107,107,138,.2);color:var(--mist);}
+.q-required{font-size:11px;color:var(--rose);font-weight:600;}
+.q-options{font-size:11px;color:var(--fog);font-family:'DM Mono',monospace;}
+.q-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.icon-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--wire);background:transparent;color:var(--fog);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:background .15s,color .15s;}
+.icon-btn:hover{background:var(--ink-4);color:var(--snow);}
+.icon-btn.active{background:var(--violet-dim);color:var(--violet);border-color:rgba(167,139,250,.3);}
+.q-logic-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--violet-dim);color:var(--violet);border:1px solid rgba(167,139,250,.25);cursor:pointer;}
+/* Logic editor panel */
+.logic-panel{display:none;border-top:1px solid var(--wire);padding:14px 16px;background:var(--ink-3);border-radius:0 0 var(--r) var(--r);}
+.logic-panel.open{display:block;}
+.logic-rule{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px;}
+.logic-rule input,.logic-rule select{margin-bottom:0;font-size:12px;padding:6px 10px;}
+.logic-add-btn{font-size:12px;padding:5px 12px;margin-top:4px;}
+.logic-save-btn{font-size:12px;padding:5px 14px;margin-top:4px;}
+.logic-hint{font-size:11px;color:var(--fog);margin-bottom:10px;line-height:1.5;}
+
+/* ── Upload zone ── */
+.upload-zone{
+  border:2px dashed var(--wire-2);border-radius:var(--r-lg);
+  padding:40px;text-align:center;cursor:pointer;
+  transition:border-color .2s,background .2s;
+}
+.upload-zone:hover,.upload-zone.dragging{border-color:var(--lime);background:var(--lime-dim);}
+.upload-icon{font-size:36px;margin-bottom:10px;}
+.upload-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:6px;}
+.upload-sub{font-size:12px;color:var(--fog);}
+
+/* ── Preview extracted questions ── */
+.preview-q{
+  background:var(--ink-3);border:1px solid var(--wire);
+  border-radius:var(--r);padding:12px 14px;margin-bottom:8px;
+}
+.preview-q-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.preview-q-num{width:22px;height:22px;border-radius:4px;background:var(--amber-dim);color:var(--amber);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;}
+.preview-q input{margin-bottom:0;}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:4px;margin-bottom:24px;padding:4px;background:var(--ink-3);border-radius:10px;width:fit-content;}
+.tab{padding:7px 18px;border-radius:7px;border:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,color .15s;background:transparent;color:var(--fog);}
+.tab:hover{color:var(--snow);}
+.tab.active{background:var(--ink-2);color:var(--white);box-shadow:0 2px 8px rgba(0,0,0,.3);}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;bottom:24px;right:24px;
+  background:var(--ink-2);border:1px solid var(--wire-2);
+  border-radius:var(--r-lg);padding:14px 20px;
+  font-size:13px;z-index:9999;
+  display:flex;align-items:center;gap:10px;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  transform:translateY(80px);opacity:0;
+  transition:transform .25s,opacity .25s;
+  max-width:320px;
+}
+.toast.show{transform:none;opacity:1;}
+.toast.success{border-left:3px solid var(--lime);}
+.toast.error{border-left:3px solid var(--rose);}
+.toast.info{border-left:3px solid var(--cyan);}
+
+/* ── Spinner ── */
+.spinner{width:16px;height:16px;border:2px solid var(--wire-2);border-top-color:var(--lime);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:48px 20px;color:var(--fog);}
+.empty-icon{font-size:40px;margin-bottom:12px;}
+.empty-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--mist);margin-bottom:6px;}
+.empty-sub{font-size:13px;}
+
+/* ── Modal overlay ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{background:var(--ink-2);border:1px solid var(--wire-2);border-radius:20px;padding:32px;width:100%;max-width:520px;box-shadow:0 24px 64px rgba(0,0,0,.6);animation:fadeUp .25s ease both;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+.modal-title{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;margin-bottom:6px;}
+.modal-sub{font-size:13px;color:var(--fog);margin-bottom:24px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;}
+
+/* ── User info ── */
+.user-info{display:flex;align-items:center;gap:10px;}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--lime);color:var(--ink);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;}
+.user-name{font-size:13px;font-weight:500;}
+.user-role{font-size:11px;color:var(--fog);}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-brand">
+    <div class="pip">📊</div>
+    <div>
+      <div class="hdr-title">Survey <span>Platform</span></div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <a href="/survey_dashboard.html" style="text-decoration:none;">
+      <span class="chip chip-fog">📈 Analytics Dashboard</span>
+    </a>
+    <a href="/client.html" style="text-decoration:none;">
+      <span class="chip chip-lime">🎙 Survey Agent</span>
+    </a>
+    <div class="user-info">
+      <div class="avatar" id="userAvatar">A</div>
+      <div>
+        <div class="user-name" id="userName">Admin</div>
+        <div class="user-role" id="userRole">admin</div>
+      </div>
+    </div>
+    <span class="chip chip-fog" style="cursor:pointer;" onclick="doLogout()">Sign out</span>
+    <img src="/static/M2T_LOGO.png" alt="Logo" style="height:36px;width:auto;object-fit:contain;opacity:.9;margin-left:4px;" onerror="this.style.display='none'"/>
+  </div>
+</div>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="nav-section">Navigation</div>
+    <button class="nav-btn active" onclick="showView('campaigns')" id="navCampaigns">
+      📋 Campaigns <span class="badge" id="campaignCount">0</span>
+    </button>
+    <button class="nav-btn" onclick="showView('users')" id="navUsers">
+      👥 Users
+    </button>
+
+    <div class="nav-section" style="margin-top:12px;">Selected Campaign</div>
+    <button class="nav-btn" onclick="showView('questions')" id="navQuestions" disabled>
+      ❓ Questions
+    </button>
+    <button class="nav-btn" onclick="showView('upload')" id="navUpload" disabled>
+      ✨ Generate / Upload
+    </button>
+    <button class="nav-btn" onclick="showView('settings')" id="navSettings" disabled>
+      ⚙️ Settings
+    </button>
+
+    <!-- Campaign quick-select -->
+    <div class="nav-section" style="margin-top:12px;">Campaigns</div>
+    <div id="sidebarCampaigns"></div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- ── CAMPAIGNS VIEW ── -->
+    <div id="viewCampaigns">
+      <div class="section-hdr">
+        <div>
+          <div class="section-title">Campaigns</div>
+          <div class="section-sub">Create and manage your survey campaigns</div>
+        </div>
+        <button class="btn btn-lime" onclick="openCreateCampaign()">+ New Campaign</button>
+      </div>
+      <div class="campaign-list" id="campaignList">
+        <div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No campaigns yet</div><div class="empty-sub">Create your first campaign to get started</div></div>
+      </div>
+    </div>
+
+    <!-- ── QUESTIONS VIEW ── -->
+    <div id="viewQuestions" style="display:none;">
+      <div class="section-hdr">
+        <div>
+          <div class="section-title" id="qViewTitle">Questions</div>
+          <div class="section-sub" id="qViewSub">Manage questions for this campaign</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-ghost" onclick="showView('upload')">📄 Upload / Generate</button>
+          <button class="btn btn-lime" onclick="openAddQuestion()">+ Add Question</button>
+        </div>
+      </div>
+      <div class="q-list" id="questionList">
+        <div class="empty"><div class="empty-icon">❓</div><div class="empty-title">No questions yet</div><div class="empty-sub">Add questions manually or upload a document</div></div>
+      </div>
+    </div>
+
+    <!-- ── UPLOAD VIEW ── -->
+    <div id="viewUpload" style="display:none;">
+      <div class="section-hdr">
+        <div>
+          <div class="section-title">Add Questions</div>
+          <div class="section-sub">Upload a document or let AI generate questions from your description</div>
+        </div>
+      </div>
+
+      <!-- Mode tabs -->
+      <div class="tabs" style="margin-bottom:24px;">
+        <button class="tab active" id="tabUpload" onclick="switchUploadTab('upload')">📄 Upload Document</button>
+        <button class="tab" id="tabGenerate" onclick="switchUploadTab('generate')">🤖 AI Generate</button>
+      </div>
+
+      <!-- ══ TAB: DOCUMENT UPLOAD ══ -->
+      <div id="paneUpload">
+        <div class="panel">
+          <div class="panel-hdr">
+            <div>
+              <div class="panel-title">Document Upload</div>
+              <div class="panel-sub">Select a file, add instructions, then click Extract</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+              <div class="upload-icon">📂</div>
+              <div class="upload-title" id="uploadZoneTitle">Drop file here or click to browse</div>
+              <div class="upload-sub" id="uploadZoneSub">Supports PDF, DOCX, CSV, XLSX, TXT — max 10MB</div>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.csv,.xlsx,.xls,.txt" style="display:none;" onchange="handleFileSelect(event)">
+          </div>
+
+          <div class="field" style="margin-bottom:16px;">
+            <label>Extraction Instructions <span style="color:var(--fog);font-weight:400;">(optional)</span></label>
+            <textarea id="extractionHint" rows="3" placeholder="Tell the AI what to extract or how to interpret this document.&#10;E.g. 'This is a customer satisfaction survey. Extract only questions, not section headers.'"></textarea>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-lime" id="extractBtn" onclick="runExtraction()" disabled>
+              ✨ Extract Questions
+            </button>
+            <button class="btn btn-ghost" id="clearFileBtn" onclick="clearSelectedFile()" style="display:none;">
+              ✕ Clear file
+            </button>
+            <span id="selectedFileName" style="font-size:12px;color:var(--fog);"></span>
+          </div>
+
+          <div id="uploadProgress" style="margin-top:16px;display:none;">
+            <div style="display:flex;align-items:center;gap:10px;color:var(--fog);font-size:13px;">
+              <div class="spinner"></div>
+              <span id="uploadProgressText">Extracting questions…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ TAB: AI GENERATE ══ -->
+      <div id="paneGenerate" style="display:none;">
+        <div class="panel">
+          <div class="panel-hdr">
+            <div>
+              <div class="panel-title">🤖 AI Question Generator</div>
+              <div class="panel-sub">Describe your survey and AI will design the questions for you</div>
+            </div>
+          </div>
+
+          <!-- How it works hint -->
+          <div style="background:var(--violet-dim);border:1px solid rgba(167,139,250,.2);border-radius:var(--r);padding:14px 16px;margin-bottom:20px;">
+            <div style="font-size:12px;color:var(--violet);font-weight:600;margin-bottom:6px;">✦ How it works</div>
+            <div style="font-size:12px;color:var(--mist);line-height:1.6;">
+              Describe your survey in detail — the purpose, target audience, topics to cover, and any special requirements.
+              The AI will design a professional, well-typed set of questions (scale, yes/no, multiple choice, etc.) tailored to your research objectives.
+              You can review and edit every question before saving.
+            </div>
+          </div>
+
+          <!-- Campaign description (pre-filled from campaign) -->
+          <div class="field" style="margin-bottom:16px;">
+            <label>Survey Description <span style="color:var(--rose);">✓ required</span></label>
+            <textarea id="genDescription" rows="6"
+              placeholder="Describe your survey in detail. Include:&#10;• The purpose and research objectives&#10;• Target audience (age group, region, demographics)&#10;• Key topics you want to cover&#10;• Any specific areas to focus on or avoid&#10;• Tone (formal/conversational)&#10;&#10;Example: 'This is a phone survey targeting urban voters aged 25-60 across Tamil Nadu. We want to understand satisfaction with local government services, priorities for the next election, and media consumption habits. Keep questions neutral and non-leading. Include questions about healthcare, infrastructure, and employment.'"></textarea>
+            <div style="font-size:11px;color:var(--fog);margin-top:4px;">Be as detailed as possible — the more context you provide, the better the questions will be.</div>
+          </div>
+
+          <div class="form-grid" style="margin-bottom:16px;">
+            <div class="field">
+              <label>Number of Questions</label>
+              <input type="number" id="genNumQuestions" value="10" min="1" max="50"
+                style="width:100%;" placeholder="e.g. 10"/>
+              <div style="font-size:11px;color:var(--fog);margin-top:4px;">Between 1 and 50</div>
+            </div>
+            <div class="field">
+              <label>Extra Instructions <span style="color:var(--fog);font-weight:400;">(optional)</span></label>
+              <input type="text" id="genExtraInstructions"
+                placeholder="e.g. Include a yes/no screening question first, use 1–5 scales"
+                style="width:100%;"/>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-lime" id="generateBtn" onclick="runGenerate()">
+              🤖 Generate Questions
+            </button>
+            <span style="font-size:12px;color:var(--fog);">Takes ~10–20 seconds</span>
+          </div>
+
+          <div id="generateProgress" style="margin-top:16px;display:none;">
+            <div style="display:flex;align-items:center;gap:10px;color:var(--fog);font-size:13px;">
+              <div class="spinner"></div>
+              <span id="generateProgressText">AI is designing your survey questions…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shared preview panel (used by both upload and generate) -->
+      <div id="extractedPanel" style="display:none;">
+        <div class="panel">
+          <div class="panel-hdr">
+            <div>
+              <div class="panel-title" id="previewPanelTitle">Questions Preview</div>
+              <div class="panel-sub">Review and edit before saving to campaign</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost" onclick="clearExtracted()">✕ Clear</button>
+              <button class="btn btn-lime" onclick="saveExtracted()">✓ Save to Campaign</button>
+            </div>
+          </div>
+          <div id="extractedList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS VIEW ── -->
+    <div id="viewSettings" style="display:none;">
+      <div class="section-hdr">
+        <div>
+          <div class="section-title">Campaign Settings</div>
+          <div class="section-sub" id="settingsSubtitle">Configure campaign details and status</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title" style="margin-bottom:16px;">Details</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Campaign Name</label>
+            <input type="text" id="settingsName" placeholder="Campaign name"/>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="settingsStatus">
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Description</label>
+            <textarea id="settingsDesc" rows="3" placeholder="Describe the campaign…"></textarea>
+          </div>
+          <div class="field">
+            <label>Google Sheet Tab</label>
+            <input type="text" id="settingsTab" readonly style="color:var(--fog);"/>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;">
+          <button class="btn btn-lime" onclick="saveCampaignSettings()">Save Changes</button>
+          <button class="btn btn-cyan" onclick="provisionSheet()">↻ Re-provision Sheet Tab</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title" style="margin-bottom:6px;color:var(--rose);">Danger Zone</div>
+        <div class="panel-sub" style="margin-bottom:16px;">Irreversible actions</div>
+        <button class="btn btn-rose" onclick="deleteCampaign()">🗑 Delete Campaign</button>
+      </div>
+    </div>
+
+    <!-- ── USERS VIEW ── -->
+    <div id="viewUsers" style="display:none;">
+      <div class="section-hdr">
+        <div>
+          <div class="section-title">Users</div>
+          <div class="section-sub">Manage admin and interviewer accounts</div>
+        </div>
+        <button class="btn btn-lime" onclick="openCreateUser()">+ New User</button>
+      </div>
+      <div class="panel">
+        <div id="userList"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── CREATE CAMPAIGN MODAL ── -->
+<div class="overlay" id="modalCreateCampaign">
+  <div class="modal">
+    <div class="modal-title">New Campaign</div>
+    <div class="modal-sub">Create a new survey campaign</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Campaign Name *</label>
+        <input type="text" id="newCampName" placeholder="e.g. Q3 National Mood Survey"/>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="newCampDesc" rows="3" placeholder="Describe the campaign purpose…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalCreateCampaign')">Cancel</button>
+      <button class="btn btn-lime" onclick="createCampaign()">Create Campaign</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD QUESTION MODAL ── -->
+<div class="overlay" id="modalAddQuestion">
+  <div class="modal">
+    <div class="modal-title">Add Question</div>
+    <div class="modal-sub">Add a question to this campaign</div>
+    <div class="form-grid">
+      <div class="form-row">
+        <div class="field">
+          <label>Question Order *</label>
+          <input type="number" id="qOrder" min="1" value="1"/>
+        </div>
+        <div class="field">
+          <label>Type *</label>
+          <select id="qType" onchange="toggleOptions('')">
+            <option value="open_text">Open Text</option>
+            <option value="scale">Scale (custom range)</option>
+            <option value="yes_no">Yes / No</option>
+            <option value="multiple_choice">Multiple Choice</option>
+            <option value="numeric">Numeric</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Question Text *</label>
+        <textarea id="qText" rows="3" placeholder="Enter the question…"></textarea>
+      </div>
+      <div class="field" id="optionsField" style="display:none;">
+        <label>Options (one per line)</label>
+        <textarea id="qOptions" rows="4" placeholder="Option A&#10;Option B&#10;Option C"></textarea>
+      </div>
+      <div class="field" id="scaleField" style="display:none;">
+        <label>Scale Range</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="field">
+            <label style="font-size:11px;">Min value</label>
+            <input type="number" id="qScaleMin" value="1" min="0"/>
+          </div>
+          <div class="field">
+            <label style="font-size:11px;">Max value</label>
+            <input type="number" id="qScaleMax" value="5" min="1"/>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="qRequired" checked style="width:auto;margin-bottom:0;"/>
+          Required question
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalAddQuestion')">Cancel</button>
+      <button class="btn btn-lime" onclick="saveQuestion()">Add Question</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT QUESTION MODAL ── -->
+<div class="overlay" id="modalEditQuestion">
+  <div class="modal">
+    <div class="modal-title">Edit Question</div>
+    <div class="modal-sub">Update question details</div>
+    <input type="hidden" id="editQId"/>
+    <div class="form-grid">
+      <div class="form-row">
+        <div class="field">
+          <label>Question Order *</label>
+          <input type="number" id="editQOrder" min="1" value="1"/>
+        </div>
+        <div class="field">
+          <label>Type *</label>
+          <select id="editqType" onchange="toggleOptions('edit')">
+            <option value="open_text">Open Text</option>
+            <option value="scale">Scale (custom range)</option>
+            <option value="yes_no">Yes / No</option>
+            <option value="multiple_choice">Multiple Choice</option>
+            <option value="numeric">Numeric</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Question Text *</label>
+        <textarea id="editQText" rows="3" placeholder="Enter the question…"></textarea>
+      </div>
+      <div class="field" id="editoptionsField" style="display:none;">
+        <label>Options (one per line)</label>
+        <textarea id="editQOptions" rows="4" placeholder="Option A&#10;Option B&#10;Option C"></textarea>
+      </div>
+      <div class="field" id="editscaleField" style="display:none;">
+        <label>Scale Range</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="field">
+            <label style="font-size:11px;">Min value</label>
+            <input type="number" id="editQScaleMin" value="1" min="0"/>
+          </div>
+          <div class="field">
+            <label style="font-size:11px;">Max value</label>
+            <input type="number" id="editQScaleMax" value="5" min="1"/>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="editQRequired" checked style="width:auto;margin-bottom:0;"/>
+          Required question
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditQuestion')">Cancel</button>
+      <button class="btn btn-lime" onclick="saveEditQuestion()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CREATE USER MODAL ── -->
+<div class="overlay" id="modalCreateUser">
+  <div class="modal">
+    <div class="modal-title">New User</div>
+    <div class="modal-sub">Create an admin or interviewer account</div>
+    <div class="form-grid">
+      <div class="field"><label>Full Name *</label><input type="text" id="newUserName" placeholder="Jane Smith"/></div>
+      <div class="field"><label>Email *</label><input type="email" id="newUserEmail" placeholder="jane@example.com"/></div>
+      <div class="field"><label>Password *</label><input type="password" id="newUserPass" placeholder="••••••••"/></div>
+      <div class="field">
+        <label>Role</label>
+        <select id="newUserRole">
+          <option value="interviewer">Interviewer</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modalCreateUser')">Cancel</button>
+      <button class="btn btn-lime" onclick="createUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = window.location.origin;
+let token = localStorage.getItem('token');
+let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+let selectedCampaign = null;
+let campaigns = [];
+let currentQuestions = [];  // live question list for the selected campaign
+let extractedQuestions = [];
+
+// ── Auth guard ──
+if (!token || currentUser.role !== 'admin') {
+  window.location.href = '/login.html';
+}
+
+// ── Init UI ──
+document.getElementById('userAvatar').textContent = (currentUser.name || 'A')[0].toUpperCase();
+document.getElementById('userName').textContent = currentUser.name || 'Admin';
+document.getElementById('userRole').textContent = currentUser.role || 'admin';
+
+// ── API helper ──
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  if (res.status === 401) { doLogout(); return null; }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'API error');
+  return data;
+}
+
+async function apiUpload(path, formData) {
+  const res = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Upload failed');
+  return data;
+}
+
+// ── Toast ──
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// ── Navigation ──
+function showView(name) {
+  // Pre-fill AI generate description from campaign when navigating to upload view
+  if (name === 'upload' && selectedCampaign) {
+    const descEl = document.getElementById('genDescription');
+    if (descEl && !descEl.value.trim() && selectedCampaign.description) {
+      descEl.value = selectedCampaign.description;
+    }
+  }
+  ['campaigns','questions','upload','settings','users'].forEach(v => {
+    document.getElementById('view' + v.charAt(0).toUpperCase() + v.slice(1)).style.display = 'none';
+  });
+  ['navCampaigns','navQuestions','navUpload','navSettings','navUsers'].forEach(b => {
+    const el = document.getElementById(b);
+    if (el) el.classList.remove('active');
+  });
+  const id = 'view' + name.charAt(0).toUpperCase() + name.slice(1);
+  document.getElementById(id).style.display = '';
+  const navId = 'nav' + name.charAt(0).toUpperCase() + name.slice(1);
+  const navEl = document.getElementById(navId);
+  if (navEl) navEl.classList.add('active');
+}
+
+// ── Modals ──
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => {
+  if (e.target === o) o.classList.remove('open');
+}));
+
+// ── Campaigns ──
+async function loadCampaigns() {
+  try {
+    campaigns = await api('GET', '/admin/campaigns');
+    renderCampaigns();
+    renderSidebarCampaigns();
+    document.getElementById('campaignCount').textContent = campaigns.length;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderCampaigns() {
+  const list = document.getElementById('campaignList');
+  if (!campaigns.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No campaigns yet</div><div class="empty-sub">Create your first campaign to get started</div></div>';
+    return;
+  }
+  list.innerHTML = campaigns.map(c => `
+    <div class="campaign-card ${selectedCampaign?.id === c.id ? 'selected' : ''}" onclick="selectCampaign('${c.id}')">
+      <div class="c-name">${escHtml(c.name)}</div>
+      <div class="c-desc">${escHtml(c.description || 'No description')}</div>
+      <div class="c-meta">
+        <span class="status-badge status-${c.status}">${c.status}</span>
+        <span class="c-stat">Tab: ${escHtml(c.google_sheet_tab_name || '—')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSidebarCampaigns() {
+  const el = document.getElementById('sidebarCampaigns');
+  el.innerHTML = campaigns.slice(0, 8).map(c => `
+    <button class="nav-btn" onclick="selectCampaign('${c.id}')" style="font-size:12px;">
+      <span style="opacity:.5">●</span> ${escHtml(c.name)}
+    </button>
+  `).join('');
+}
+
+function selectCampaign(id) {
+  selectedCampaign = campaigns.find(c => c.id === id);
+  if (!selectedCampaign) return;
+  ['navQuestions','navUpload','navSettings'].forEach(b => {
+    const el = document.getElementById(b);
+    if (el) el.disabled = false;
+  });
+  renderCampaigns();
+  showView('questions');
+  loadQuestions();
+  document.getElementById('qViewTitle').textContent = selectedCampaign.name;
+  document.getElementById('qViewSub').textContent = `${selectedCampaign.status} · ${selectedCampaign.google_sheet_tab_name || 'no tab'}`;
+  document.getElementById('settingsSubtitle').textContent = selectedCampaign.name;
+  document.getElementById('settingsName').value = selectedCampaign.name;
+  document.getElementById('settingsStatus').value = selectedCampaign.status;
+  document.getElementById('settingsDesc').value = selectedCampaign.description || '';
+  document.getElementById('settingsTab').value = selectedCampaign.google_sheet_tab_name || '';
+}
+
+function openCreateCampaign() {
+  document.getElementById('newCampName').value = '';
+  document.getElementById('newCampDesc').value = '';
+  openModal('modalCreateCampaign');
+}
+
+async function createCampaign() {
+  const name = document.getElementById('newCampName').value.trim();
+  const description = document.getElementById('newCampDesc').value.trim();
+  if (!name) { toast('Campaign name is required', 'error'); return; }
+  try {
+    const camp = await api('POST', '/admin/campaign', { name, description });
+    closeModal('modalCreateCampaign');
+    toast(`Campaign "${camp.name}" created`, 'success');
+    await loadCampaigns();
+    selectCampaign(camp.id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Questions ──
+async function loadQuestions() {
+  if (!selectedCampaign) return;
+  try {
+    const qs = await api('GET', `/admin/campaign/${selectedCampaign.id}/questions`);
+    renderQuestions(qs);
+    // Pre-fill next order
+    document.getElementById('qOrder').value = qs.length + 1;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderQuestions(qs) {
+  currentQuestions = qs;  // keep module-level ref in sync
+  const list = document.getElementById('questionList');
+  if (!qs.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">❓</div><div class="empty-title">No questions yet</div><div class="empty-sub">Add questions manually or upload a document</div></div>';
+    return;
+  }
+  list.innerHTML = qs.map(q => {
+    let optLabel = '';
+    if (q.question_type === 'multiple_choice' && q.options?.length) {
+      optLabel = `<span class="q-options">${q.options.join(' · ')}</span>`;
+    } else if (q.question_type === 'scale' && q.options?.length) {
+      const opts = q.options;
+      const isLabelFormat = opts.length > 0 && String(opts[0]).includes('=');
+      if (isLabelFormat) {
+        // Show as "1=Daily · 2=Sometimes · 4=Never · 8=NR"
+        optLabel = `<span class="q-options">${opts.join(' · ')}</span>`;
+      } else if (opts.length === 2) {
+        optLabel = `<span class="q-options">Range: ${opts[0]}–${opts[1]}</span>`;
+      }
+    }
+    return `
+    <div class="q-item" draggable="true" data-qid="${q.id}" data-order="${q.question_order}" style="flex-direction:column;align-items:stretch;padding:0;">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;">
+        <div class="q-drag-handle" title="Drag to reorder">⠿</div>
+        <div class="q-num">Q${q.question_order}</div>
+        <div class="q-body">
+          <div class="q-text">${escHtml(q.question_text)}</div>
+          <div class="q-meta">
+            <span class="q-type qt-${q.question_type}">${fmtType(q.question_type)}</span>
+            ${q.required ? '<span class="q-required">Required</span>' : ''}
+            ${optLabel}
+            ${q.question_logic && q.question_logic.length ? '<span class="q-logic-badge" onclick="toggleLogicPanel(\'' + q.id + '\')">⚡ ' + q.question_logic.length + ' rule' + (q.question_logic.length > 1 ? 's' : '') + '</span>' : ''}
+          </div>
+        </div>
+        <div class="q-actions">
+          <button class="icon-btn" title="Move Up" onclick="moveQuestion('${q.id}', -1)">▲</button>
+          <button class="icon-btn" title="Move Down" onclick="moveQuestion('${q.id}', 1)">▼</button>
+          <button class="icon-btn ${q.question_logic && q.question_logic.length ? 'active' : ''}" title="Branching Logic" id="logicBtn_${q.id}" onclick="toggleLogicPanel('${q.id}')">⚡</button>
+          <button class="icon-btn" title="Edit" onclick="openEditQuestion(${JSON.stringify(q).replace(/"/g,'&quot;')})">✏️</button>
+          <button class="icon-btn" title="Delete" onclick="deleteQuestion('${q.id}')">🗑</button>
+        </div>
+      </div>
+      <div class="logic-panel" id="logicPanel_${q.id}">
+        ${buildLogicPanelHTML(q)}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Wire up drag-and-drop
+  initDragDrop();
+}
+
+// ── Move question up/down via buttons ──
+async function moveQuestion(qid, direction) {
+  if (!selectedCampaign) return;
+  // Find current questions order from DOM
+  const items = [...document.querySelectorAll('#questionList .q-item')];
+  const idx = items.findIndex(el => el.dataset.qid === qid);
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= items.length) return;
+
+  const aEl = items[idx];
+  const bEl = items[targetIdx];
+  const aOrder = parseInt(aEl.dataset.order);
+  const bOrder = parseInt(bEl.dataset.order);
+  const aId    = aEl.dataset.qid;
+  const bId    = bEl.dataset.qid;
+
+  try {
+    await Promise.all([
+      api('PATCH', `/admin/campaign/${selectedCampaign.id}/questions/${aId}`, { question_order: bOrder }),
+      api('PATCH', `/admin/campaign/${selectedCampaign.id}/questions/${bId}`, { question_order: aOrder }),
+    ]);
+    loadQuestions();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Drag-and-drop reordering ──
+let _dragSrcId = null;
+
+function initDragDrop() {
+  const items = document.querySelectorAll('#questionList .q-item');
+  items.forEach(item => {
+    item.addEventListener('dragstart', e => {
+      _dragSrcId = item.dataset.qid;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      document.querySelectorAll('#questionList .q-item').forEach(el => el.classList.remove('drag-over'));
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('#questionList .q-item').forEach(el => el.classList.remove('drag-over'));
+      if (item.dataset.qid !== _dragSrcId) item.classList.add('drag-over');
+    });
+    item.addEventListener('drop', async e => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      const targetId = item.dataset.qid;
+      if (!targetId || targetId === _dragSrcId || !selectedCampaign) return;
+
+      const srcOrder  = parseInt(document.querySelector(`[data-qid="${_dragSrcId}"]`)?.dataset.order || 0);
+      const targOrder = parseInt(item.dataset.order || 0);
+      if (srcOrder === targOrder) return;
+
+      try {
+        await Promise.all([
+          api('PATCH', `/admin/campaign/${selectedCampaign.id}/questions/${_dragSrcId}`, { question_order: targOrder }),
+          api('PATCH', `/admin/campaign/${selectedCampaign.id}/questions/${targetId}`,  { question_order: srcOrder }),
+        ]);
+        loadQuestions();
+      } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+}
+
+function fmtType(t) {
+  if (t && t.startsWith('scale')) return 'Scale';
+  return { multiple_choice:'Multiple Choice', yes_no:'Yes/No', numeric:'Numeric', open_text:'Open Text' }[t] || t;
+}
+
+function toggleOptions(prefix) {
+  prefix = prefix || '';
+  const t = document.getElementById(prefix + 'qType').value;
+  const optField = document.getElementById(prefix + 'optionsField');
+  const scaleField = document.getElementById(prefix + 'scaleField');
+  if (optField) optField.style.display = t === 'multiple_choice' ? '' : 'none';
+  if (scaleField) scaleField.style.display = t === 'scale' ? '' : 'none';
+}
+
+function openAddQuestion() {
+  if (!selectedCampaign) { toast('Select a campaign first', 'error'); return; }
+  document.getElementById('qType').value = 'open_text';
+  document.getElementById('qText').value = '';
+  document.getElementById('qOptions').value = '';
+  document.getElementById('qScaleMin').value = 1;
+  document.getElementById('qScaleMax').value = 5;
+  toggleOptions('');
+  openModal('modalAddQuestion');
+}
+
+async function saveQuestion() {
+  const text = document.getElementById('qText').value.trim();
+  const type = document.getElementById('qType').value;
+  const order = parseInt(document.getElementById('qOrder').value);
+  const required = document.getElementById('qRequired').checked;
+  const optRaw = document.getElementById('qOptions').value;
+
+  let options = null;
+  if (type === 'multiple_choice') {
+    options = optRaw.split('\n').map(o=>o.trim()).filter(Boolean);
+  } else if (type === 'scale') {
+    const min = parseInt(document.getElementById('qScaleMin').value) || 1;
+    const max = parseInt(document.getElementById('qScaleMax').value) || 5;
+    options = [String(min), String(max)];
+  }
+
+  if (!text) { toast('Question text is required', 'error'); return; }
+  try {
+    await api('POST', `/admin/campaign/${selectedCampaign.id}/questions`, [
+      { question_order: order, question_text: text, question_type: type, options, required }
+    ]);
+    closeModal('modalAddQuestion');
+    toast('Question added', 'success');
+    loadQuestions();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteQuestion(qid) {
+  if (!confirm('Delete this question?')) return;
+  try {
+    await api('DELETE', `/admin/campaign/${selectedCampaign.id}/questions/${qid}`);
+    toast('Question deleted', 'success');
+    loadQuestions();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openEditQuestion(q) {
+  document.getElementById('editQId').value = q.id;
+  document.getElementById('editQOrder').value = q.question_order;
+  document.getElementById('editQText').value = q.question_text;
+  document.getElementById('editQRequired').checked = q.required;
+
+  const typeEl = document.getElementById('editqType');
+  typeEl.value = q.question_type;
+
+  // Populate options/scale fields
+  document.getElementById('editQOptions').value = '';
+  document.getElementById('editQScaleMin').value = 1;
+  document.getElementById('editQScaleMax').value = 5;
+
+  if (q.question_type === 'multiple_choice' && q.options?.length) {
+    document.getElementById('editQOptions').value = q.options.join('\n');
+  } else if (q.question_type === 'scale' && q.options?.length === 2) {
+    document.getElementById('editQScaleMin').value = q.options[0];
+    document.getElementById('editQScaleMax').value = q.options[1];
+  }
+
+  toggleOptions('edit');
+  openModal('modalEditQuestion');
+}
+
+async function saveEditQuestion() {
+  const qid = document.getElementById('editQId').value;
+  const text = document.getElementById('editQText').value.trim();
+  const type = document.getElementById('editqType').value;
+  const order = parseInt(document.getElementById('editQOrder').value);
+  const required = document.getElementById('editQRequired').checked;
+
+  let options = null;
+  if (type === 'multiple_choice') {
+    options = document.getElementById('editQOptions').value.split('\n').map(o=>o.trim()).filter(Boolean);
+  } else if (type === 'scale') {
+    const min = parseInt(document.getElementById('editQScaleMin').value) || 1;
+    const max = parseInt(document.getElementById('editQScaleMax').value) || 5;
+    options = [String(min), String(max)];
+  }
+
+  if (!text) { toast('Question text is required', 'error'); return; }
+  try {
+    await api('PATCH', `/admin/campaign/${selectedCampaign.id}/questions/${qid}`, {
+      question_order: order, question_text: text, question_type: type, options, required
+    });
+    closeModal('modalEditQuestion');
+    toast('Question updated', 'success');
+    loadQuestions();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Upload tab switching ──
+function switchUploadTab(tab) {
+  document.getElementById('paneUpload').style.display   = tab === 'upload'   ? '' : 'none';
+  document.getElementById('paneGenerate').style.display = tab === 'generate' ? '' : 'none';
+  document.getElementById('tabUpload').classList.toggle('active',   tab === 'upload');
+  document.getElementById('tabGenerate').classList.toggle('active', tab === 'generate');
+  // Clear preview when switching tabs
+  document.getElementById('extractedPanel').style.display = 'none';
+  extractedQuestions = [];
+}
+
+// ── AI Question Generation ──
+async function runGenerate() {
+  if (!selectedCampaign) { toast('Select a campaign first', 'error'); return; }
+
+  const description = (document.getElementById('genDescription').value || '').trim();
+  const numRaw      = parseInt(document.getElementById('genNumQuestions').value, 10);
+  const extra       = (document.getElementById('genExtraInstructions').value || '').trim();
+
+  if (!description || description.length < 20) {
+    toast('Please provide a detailed description (at least 20 characters)', 'error');
+    return;
+  }
+  if (isNaN(numRaw) || numRaw < 1 || numRaw > 50) {
+    toast('Number of questions must be between 1 and 50', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  document.getElementById('generateProgress').style.display = '';
+  document.getElementById('generateProgressText').textContent = 'AI is designing your survey questions…';
+  document.getElementById('extractedPanel').style.display = 'none';
+  extractedQuestions = [];
+
+  try {
+    const res = await api('POST',
+      '/admin/campaign/' + selectedCampaign.id + '/generate-questions',
+      {
+        description:        description,
+        num_questions:      numRaw,
+        extra_instructions: extra || null,
+      }
+    );
+
+    extractedQuestions = res.questions || [];
+    document.getElementById('previewPanelTitle').textContent =
+      '🤖 AI-Generated Questions (' + extractedQuestions.length + ')';
+    renderExtracted(extractedQuestions);
+    toast('AI generated ' + res.generated_count + ' questions — review below', 'success');
+
+  } catch(e) {
+    toast('Generation failed: ' + e.message, 'error');
+  } finally {
+    document.getElementById('generateProgress').style.display = 'none';
+    btn.disabled = false;
+  }
+}
+
+// ── Document upload ──
+let _pendingFile = null;   // holds the selected File object until Extract is clicked
+
+const dropZone = document.getElementById('uploadZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragging');
+  const f = e.dataTransfer.files[0];
+  if (f) stageFile(f);
+});
+
+function handleFileSelect(e) {
+  const f = e.target.files[0];
+  if (f) stageFile(f);
+  e.target.value = '';  // reset so same file can be re-selected
+}
+
+/** Stage a file for extraction — does NOT call the API yet. */
+function stageFile(file) {
+  if (!selectedCampaign) { toast('Select a campaign first', 'error'); return; }
+  _pendingFile = file;
+
+  // Update upload zone appearance
+  document.getElementById('uploadZoneTitle').textContent = `📄 ${file.name}`;
+  document.getElementById('uploadZoneSub').textContent   = `${(file.size / 1024).toFixed(1)} KB — ready to extract`;
+  document.getElementById('uploadZone').style.borderColor = 'var(--lime)';
+  document.getElementById('uploadZone').style.background  = 'var(--lime-dim)';
+
+  document.getElementById('selectedFileName').textContent = file.name;
+  document.getElementById('extractBtn').disabled          = false;
+  document.getElementById('clearFileBtn').style.display   = '';
+
+  toast(`"${file.name}" selected — add instructions if needed, then click Extract`, 'info');
+}
+
+/** Clear staged file and reset UI. */
+function clearSelectedFile() {
+  _pendingFile = null;
+  document.getElementById('uploadZoneTitle').textContent = 'Drop file here or click to browse';
+  document.getElementById('uploadZoneSub').textContent   = 'Supports PDF, DOCX, CSV, XLSX, TXT — max 10MB';
+  document.getElementById('uploadZone').style.borderColor = '';
+  document.getElementById('uploadZone').style.background  = '';
+  document.getElementById('selectedFileName').textContent = '';
+  document.getElementById('extractBtn').disabled          = true;
+  document.getElementById('clearFileBtn').style.display   = 'none';
+  document.getElementById('extractedPanel').style.display = 'none';
+  extractedQuestions = [];
+}
+
+/** Called when the user clicks "Extract Questions". */
+async function runExtraction() {
+  if (!_pendingFile) { toast('Select a file first', 'error'); return; }
+  if (!selectedCampaign) { toast('Select a campaign first', 'error'); return; }
+
+  const hint = (document.getElementById('extractionHint')?.value || '').trim();
+
+  document.getElementById('uploadProgress').style.display = '';
+  document.getElementById('uploadProgressText').textContent = `Extracting from "${_pendingFile.name}"…`;
+  document.getElementById('extractedPanel').style.display = 'none';
+  document.getElementById('extractBtn').disabled = true;
+
+  try {
+    const fd = new FormData();
+    fd.append('file', _pendingFile);
+    if (hint) fd.append('extraction_hint', hint);
+
+    const res = await apiUpload(`/admin/campaign/${selectedCampaign.id}/upload-questions`, fd);
+    extractedQuestions = res.questions || [];
+    document.getElementById('previewPanelTitle').textContent = 'Extracted Questions Preview';
+    renderExtracted(extractedQuestions);
+    toast(`Extracted ${res.extracted_count} questions — review below`, 'success');
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    document.getElementById('uploadProgress').style.display = 'none';
+    document.getElementById('extractBtn').disabled = false;
+  }
+}
+
+function renderExtracted(qs) {
+  const panel = document.getElementById('extractedPanel');
+  const list = document.getElementById('extractedList');
+  if (!qs.length) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  list.innerHTML = qs.map((q, i) => `
+    <div class="preview-q">
+      <div class="preview-q-hdr">
+        <div class="preview-q-num">${q.question_number || i+1}</div>
+        <select style="margin-bottom:0;width:auto;font-size:12px;" id="eq_type_${i}" onchange="updateExtractedType(${i}, this.value)">
+          ${['open_text','scale','yes_no','multiple_choice','numeric'].map(t=>
+            `<option value="${t}" ${(q.question_type===t||(t==='scale'&&q.question_type==='scale_1_5'))?'selected':''}>${fmtType(t)||t}</option>`
+          ).join('')}
+        </select>
+      </div>
+      <textarea style="margin-bottom:8px;" rows="2" id="eq_text_${i}"
+        onchange="extractedQuestions[${i}].question_text=this.value"
+      >${escHtml(q.question_text)}</textarea>
+      <div id="eq_extra_${i}">
+        ${renderExtractedExtra(q, i)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderExtractedExtra(q, i) {
+  const type = q.question_type === 'scale_1_5' ? 'scale' : (q.question_type || 'open_text');
+
+  if (type === 'multiple_choice') {
+    return `<textarea rows="3" style="font-size:12px;margin-top:4px;" placeholder="Options (one per line)"
+      onchange="extractedQuestions[${i}].options=this.value.split('\n').filter(Boolean)"
+    >${escHtml((q.options||[]).join('\n'))}</textarea>`;
+  }
+
+  if (type === 'scale') {
+    const opts = q.options || [];
+    // Detect N=Label format (new) vs [min, max] numeric pair (legacy)
+    const isLabelFormat = opts.length > 0 && String(opts[0]).includes('=');
+
+    if (isLabelFormat) {
+      // Show full labelled scale for editing
+      const rows = Math.max(3, opts.length + 1);
+      return `<div style="margin-top:6px;">
+        <div style="font-size:11px;color:var(--fog);margin-bottom:4px;">
+          Scale options (format: N=Label, one per line)
+        </div>
+        <textarea rows="${rows}" style="font-size:12px;" placeholder="1=Daily\n2=Sometimes\n3=Rarely\n4=Never\n8=No response"
+          onchange="extractedQuestions[${i}].options=this.value.split('\n').map(s=>s.trim()).filter(Boolean)"
+        >${escHtml(opts.join('\n'))}</textarea>
+      </div>`;
+    } else {
+      // Legacy [min, max] pair
+      const min = opts[0] || '1';
+      const max = opts[1] || '5';
+      return `<div style="display:flex;gap:10px;margin-top:4px;align-items:center;font-size:12px;color:var(--fog);">
+        Scale range:
+        <input type="number" id="eq_scalemin_${i}" style="width:70px;padding:4px 8px;font-size:12px;margin-bottom:0;" value="${min}"
+          onchange="extractedQuestions[${i}].options=[this.value, document.getElementById('eq_scalemax_${i}').value]" />
+        to
+        <input type="number" id="eq_scalemax_${i}" style="width:70px;padding:4px 8px;font-size:12px;margin-bottom:0;" value="${max}"
+          onchange="extractedQuestions[${i}].options=[document.getElementById('eq_scalemin_${i}').value||'1', this.value]" />
+      </div>`;
+    }
+  }
+
+  return '';
+}
+
+function updateExtractedType(i, val) {
+  extractedQuestions[i].question_type = val;
+  // Re-render the extra fields
+  document.getElementById(`eq_extra_${i}`).innerHTML = renderExtractedExtra(extractedQuestions[i], i);
+}
+
+function clearExtracted() {
+  extractedQuestions = [];
+  document.getElementById('extractedPanel').style.display = 'none';
+  clearSelectedFile();
+}
+
+async function saveExtracted() {
+  if (!selectedCampaign || !extractedQuestions.length) return;
+  // Read edited text values
+  extractedQuestions.forEach((q, i) => {
+    const el = document.getElementById(`eq_text_${i}`);
+    if (el) q.question_text = el.value.trim();
+  });
+  const payload = extractedQuestions.map((q, i) => {
+    let qtype = q.question_type || 'open_text';
+    if (qtype === 'scale_1_5') qtype = 'scale';
+
+    let opts = q.options?.length ? [...q.options] : null;
+
+    if (qtype === 'scale') {
+      if (!opts) {
+        // No options at all — default 1–5
+        opts = ['1', '5'];
+      } else if (opts.length > 0 && opts[0].includes('=')) {
+        // N=Label format: extract numeric parts for [min, max]
+        // but KEEP the full labelled array so prompt_builder can use it
+        // The DB stores these as the options JSON array directly.
+        // The prompt_builder already handles N=Label style options for display.
+        // Keep opts as the full labelled array.
+        opts = opts; // keep N=Label array as-is
+      } else if (opts.length === 2 && !opts[0].includes('=')) {
+        // Already [min, max] numeric pair
+        opts = opts;
+      }
+      // else leave as-is
+    }
+
+    return {
+      question_order: q.question_number || i + 1,
+      question_text: q.question_text,
+      question_type: qtype,
+      options: opts,
+      required: true,
+    };
+  });
+  try {
+    await api('POST', `/admin/campaign/${selectedCampaign.id}/questions`, payload);
+    toast(`Saved ${payload.length} questions to campaign`, 'success');
+    clearExtracted();
+    showView('questions');
+    loadQuestions();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Settings ──
+async function saveCampaignSettings() {
+  if (!selectedCampaign) return;
+  const name = document.getElementById('settingsName').value.trim();
+  const status = document.getElementById('settingsStatus').value;
+  const description = document.getElementById('settingsDesc').value.trim();
+  try {
+    const updated = await api('PATCH', `/admin/campaign/${selectedCampaign.id}`, { name, status, description });
+    selectedCampaign = updated;
+    campaigns = campaigns.map(c => c.id === updated.id ? updated : c);
+    renderCampaigns();
+    document.getElementById('settingsTab').value = updated.google_sheet_tab_name || '';
+    toast('Campaign updated', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function provisionSheet() {
+  if (!selectedCampaign) return;
+  try {
+    const res = await api('POST', `/admin/campaign/${selectedCampaign.id}/provision-sheet`);
+    toast(`Sheet tab "${res.tab_name}" provisioned (${res.columns} columns)`, 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteCampaign() {
+  if (!selectedCampaign) return;
+  if (!confirm(`Delete "${selectedCampaign.name}" and all its data? This cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/admin/campaign/${selectedCampaign.id}`);
+    toast('Campaign deleted', 'success');
+    selectedCampaign = null;
+    ['navQuestions','navUpload','navSettings'].forEach(b => {
+      const el = document.getElementById(b);
+      if (el) el.disabled = true;
+    });
+    showView('campaigns');
+    loadCampaigns();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Users ──
+function openCreateUser() {
+  ['newUserName','newUserEmail','newUserPass'].forEach(id => document.getElementById(id).value = '');
+  openModal('modalCreateUser');
+}
+
+async function createUser() {
+  const name  = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  const password = document.getElementById('newUserPass').value;
+  const role  = document.getElementById('newUserRole').value;
+  if (!name || !email || !password) { toast('All fields required', 'error'); return; }
+  try {
+    await api('POST', '/admin/users', { name, email, password, role });
+    closeModal('modalCreateUser');
+    toast(`User "${name}" created`, 'success');
+    loadUsers();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function loadUsers() {
+  try {
+    const users = await api('GET', '/admin/users');
+    const list = document.getElementById('userList');
+    if (!users.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">No users</div></div>'; return; }
+    list.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="border-bottom:1px solid var(--wire);">
+          <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--fog);font-weight:600;letter-spacing:.05em;">NAME</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--fog);font-weight:600;">EMAIL</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;color:var(--fog);font-weight:600;">ROLE</th>
+        </tr></thead>
+        <tbody>
+          ${users.map(u => `
+            <tr style="border-bottom:1px solid var(--wire);">
+              <td style="padding:12px;font-size:13px;font-weight:500;">${escHtml(u.name)}</td>
+              <td style="padding:12px;font-size:13px;color:var(--fog);font-family:'DM Mono',monospace;">${escHtml(u.email)}</td>
+              <td style="padding:12px;">
+                <span class="chip ${u.role==='admin'?'chip-lime':'chip-fog'}" style="font-size:11px;">${u.role}</span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Logout ──
+function doLogout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = '/login.html';
+}
+
+// ── Helpers ──
+// ── Logic / Branching panel ──
+
+function buildLogicPanelHTML(q) {
+  const rules = q.question_logic || [];
+  const qType = q.question_type;
+
+  // Condition hint based on question type
+  const conditionHint = {
+    'yes_no':          'Yes  or  No',
+    'multiple_choice': q.options ? q.options.join(' / ') : 'option text',
+    'scale':           '1  or  2  or  default',
+    'numeric':         'number  or  default',
+    'open_text':       'keyword  or  default',
+  }[qType] || 'answer text or default';
+
+  const rulesHTML = rules.map((r, i) => `
+    <div class="logic-rule" id="rule_${q.id}_${i}">
+      <input type="text" value="${escHtml(r.condition)}" placeholder="condition (e.g. ${escHtml(conditionHint.split(' / ')[0] || 'Yes')})"
+             onchange="updateLogicRule('${q.id}', ${i}, 'condition', this.value)" />
+      <input type="number" value="${r.next_order}" min="1" placeholder="go to Q#  (999=end)"
+             onchange="updateLogicRule('${q.id}', ${i}, 'next_order', parseInt(this.value))" />
+      <button class="icon-btn" title="Remove rule" onclick="removeLogicRule('${q.id}', ${i})">✕</button>
+    </div>`).join('');
+
+  return `
+    <div class="logic-hint">
+      ⚡ <strong>Branching Logic</strong> — after the respondent answers this question, jump to a specific next question.<br>
+      <strong>Condition:</strong> the answer value (e.g. <em>Yes</em>, <em>No</em>, an option label, or <em>default</em> as catch-all).<br>
+      <strong>Go to Q#:</strong> the question_order number to jump to. Use <strong>999</strong> to end the survey.
+    </div>
+    <div id="logicRules_${q.id}">${rulesHTML || '<div style="font-size:12px;color:var(--fog);margin-bottom:8px;">No rules yet — add one below.</div>'}</div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-ghost logic-add-btn" onclick="addLogicRule('${q.id}', '${escHtml(conditionHint.split(' ')[0])}')">+ Add Rule</button>
+      <button class="btn btn-lime logic-save-btn" onclick="saveLogicRules('${q.id}')">✓ Save Logic</button>
+      <button class="btn btn-rose logic-save-btn" onclick="clearLogicRules('${q.id}')">✕ Clear All</button>
+    </div>`;
+}
+
+// In-memory logic state keyed by question id
+const _logicDraft = {};
+
+function toggleLogicPanel(qid) {
+  const panel = document.getElementById('logicPanel_' + qid);
+  const btn   = document.getElementById('logicBtn_' + qid);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  // Close all other open panels first
+  document.querySelectorAll('.logic-panel.open').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.icon-btn[id^="logicBtn_"]').forEach(b => {
+    const q = currentQuestions.find(q => q.id === b.id.replace('logicBtn_',''));
+    if (q && !(q.question_logic && q.question_logic.length)) b.classList.remove('active');
+  });
+  if (!isOpen) {
+    panel.classList.add('open');
+    if (btn) btn.classList.add('active');
+  }
+}
+
+function updateLogicRule(qid, idx, field, value) {
+  if (!_logicDraft[qid]) _initDraft(qid);
+  if (_logicDraft[qid][idx]) _logicDraft[qid][idx][field] = value;
+}
+
+function _initDraft(qid) {
+  const q = currentQuestions.find(q => q.id === qid);
+  _logicDraft[qid] = JSON.parse(JSON.stringify(q && q.question_logic ? q.question_logic : []));
+}
+
+function addLogicRule(qid, defaultCondition) {
+  if (!_logicDraft[qid]) _initDraft(qid);
+  _logicDraft[qid].push({ condition: defaultCondition || '', next_order: '' });
+  _refreshLogicPanel(qid);
+}
+
+function removeLogicRule(qid, idx) {
+  if (!_logicDraft[qid]) _initDraft(qid);
+  _logicDraft[qid].splice(idx, 1);
+  _refreshLogicPanel(qid);
+}
+
+function _refreshLogicPanel(qid) {
+  // Re-render the rules list inside the open panel without closing it
+  const q = currentQuestions.find(q => q.id === qid);
+  if (!q) return;
+  const rules = _logicDraft[qid] || [];
+  const qType = q.question_type;
+  const conditionHint = {
+    'yes_no': 'Yes', 'multiple_choice': (q.options && q.options[0]) || 'option',
+    'scale': '1', 'numeric': '1', 'open_text': 'keyword'
+  }[qType] || 'answer';
+
+  const container = document.getElementById('logicRules_' + qid);
+  if (!container) return;
+  container.innerHTML = rules.length ? rules.map((r, i) => `
+    <div class="logic-rule" id="rule_${qid}_${i}">
+      <input type="text" value="${escHtml(String(r.condition || ''))}" placeholder="condition (e.g. ${escHtml(conditionHint)})"
+             onchange="updateLogicRule('${qid}', ${i}, 'condition', this.value)" />
+      <input type="number" value="${r.next_order || ''}" min="1" placeholder="go to Q# (999=end)"
+             onchange="updateLogicRule('${qid}', ${i}, 'next_order', parseInt(this.value)||0)" />
+      <button class="icon-btn" title="Remove rule" onclick="removeLogicRule('${qid}', ${i})">✕</button>
+    </div>`).join('')
+    : '<div style="font-size:12px;color:var(--fog);margin-bottom:8px;">No rules — add one below.</div>';
+}
+
+async function saveLogicRules(qid) {
+  if (!selectedCampaign) return;
+  if (!_logicDraft[qid]) _initDraft(qid);
+
+  // Read current values from inputs (in case user didn't trigger onchange)
+  const rules = _logicDraft[qid].map((r, i) => {
+    const condEl = document.querySelector(`#rule_${qid}_${i} input[type="text"]`);
+    const orderEl = document.querySelector(`#rule_${qid}_${i} input[type="number"]`);
+    return {
+      condition:  condEl  ? condEl.value.trim()           : String(r.condition || ''),
+      next_order: orderEl ? (parseInt(orderEl.value) || 0) : (r.next_order || 0),
+    };
+  }).filter(r => r.condition && r.next_order);
+
+  try {
+    await api('PATCH',
+      '/admin/campaign/' + selectedCampaign.id + '/questions/' + qid + '/logic',
+      rules
+    );
+    toast('Logic rules saved ✓', 'success');
+    // Update local state and re-render
+    const q = currentQuestions.find(q => q.id === qid);
+    if (q) q.question_logic = rules;
+    delete _logicDraft[qid];
+    // Re-render to show updated badge, keep panel open
+    const wasOpen = document.getElementById('logicPanel_' + qid)?.classList.contains('open');
+    renderQuestions(currentQuestions);
+    if (wasOpen) {
+      setTimeout(() => {
+        const p = document.getElementById('logicPanel_' + qid);
+        if (p) p.classList.add('open');
+      }, 50);
+    }
+  } catch(e) {
+    toast('Failed to save logic: ' + e.message, 'error');
+  }
+}
+
+async function clearLogicRules(qid) {
+  if (!selectedCampaign) return;
+  try {
+    await api('PATCH',
+      '/admin/campaign/' + selectedCampaign.id + '/questions/' + qid + '/logic',
+      []
+    );
+    toast('Logic rules cleared', 'info');
+    const q = currentQuestions.find(q => q.id === qid);
+    if (q) q.question_logic = [];
+    delete _logicDraft[qid];
+    renderQuestions(currentQuestions);
+  } catch(e) {
+    toast('Failed to clear logic: ' + e.message, 'error');
+  }
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot ──
+loadCampaigns();
+loadUsers();
+</script>
+</body>
+</html>

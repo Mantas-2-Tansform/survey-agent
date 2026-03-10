@@ -11,18 +11,12 @@ import google.auth
 from google.auth.transport.requests import Request as GoogleAuthRequest
 import numpy as np
 
-from config import GOODBYE_TRIGGERS
-
 logger = logging.getLogger(__name__)
 
 
 class VoiceAgent:
-    """
-    Voice survey agent using Gemini Live.
-    Supports all Indian languages defined in config.GOODBYE_TRIGGERS.
-    conversation_history holds the full transcript for storage.
-    """
-
+    """Voice survey agent using Gemini Live. conversation_history holds full transcript for storage."""
+    
     def __init__(
         self,
         model_resource: str,
@@ -33,6 +27,8 @@ class VoiceAgent:
         silence_detection: float = 1.2,
     ):
         """
+        Initialize the voice agent.
+        
         Args:
             model_resource: Full Vertex AI model resource path
             ws_url: WebSocket URL for Gemini Live
@@ -47,66 +43,46 @@ class VoiceAgent:
         self.response_callback = response_callback
         self.inactivity_timeout = inactivity_timeout
         self.silence_detection = silence_detection
-
+        
         # Connection state
         self.websocket = None
         self.conversation_active = False
         self.last_audio_time = time.time()
-
-        # ── Outbound audio (AI → client) ──────────────────────────────────────
-        # Mirrors the reference agent pattern:
-        #   _pending_audio  — accumulates raw PCM from Gemini before flushing
-        #   _pending_sr     — sample rate reported by Gemini (usually 24 000 Hz)
-        #   _last_flush     — monotonic timestamp of last flush (for diagnostics)
-        #   _min_chunks_before_flush — wait for N chunks for smoother startup
-        #   _audio_chunk_count       — counts chunks received this turn
-        self._pending_audio = bytearray()
-        self._pending_sr = 24000
-        self._last_flush = time.monotonic()
-        self._audio_chunk_count = 0
-        self._min_chunks_before_flush = 3   # buffer 3 chunks before first flush
-
-        # ── Inbound audio (user → Gemini) ─────────────────────────────────────
+        
+        # Audio processing
         self.audio_buffer = []
         self.last_send_time = 0
         self.min_chunk_interval_ms = 200
-
-        # ── Recording streams (stereo WAV, 16 kHz) ────────────────────────────
-        self.ai_audio_stream = bytearray()    # AI PCM resampled to 16 kHz
-        self.user_audio_stream = bytearray()  # User PCM (already 16 kHz)
-
+        
         # Conversation tracking
         self.conversation_history = []
         self.turn_number = 0
         self._survey_complete_sent = False  # Prevent duplicate end triggers
-
-        # Transcript buffering — accumulate word chunks into full turns
-        self._ai_turn_buf = ""      # Accumulates AI word chunks until turnComplete
-        self._user_utt_buf = ""     # Accumulates user speech until they stop talking
+        # Transcript buffering - accumulate word chunks into full turns
+        self._ai_turn_buf = ""       # Accumulates AI word chunks until turnComplete
+        self._user_utt_buf = ""      # Accumulates user speech until they stop talking
 
         # Voice-based gender detection
-        self._gender_sample_buffer = bytearray()    # Raw PCM bytes from user mic
-        self._gender_analysis_triggered = False      # Only analyse once per call
-        self.detected_gender = "unknown"             # Result stored here
+        self._gender_sample_buffer = bytearray()   # Raw PCM bytes from user mic
+        self._gender_analysis_triggered = False     # Only analyse once per call
+        self.detected_gender = "unknown"            # Result stored here
         self.gender_confidence = 0.0
-        self._ai_is_speaking = False  # True while AI audio is streaming; blocks gender buffering
-
-        # Background tasks
+        self._ai_is_speaking = False  # True while AI audio is being streamed out; blocks gender buffering
+        
+        # Tasks
         self.receive_task = None
         self.inactivity_task = None
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # CONNECTION & SETUP
-    # ──────────────────────────────────────────────────────────────────────────
-
+        
     async def start_conversation(self):
         """Initialize WebSocket connection and start the conversation."""
         try:
+            # Get Google Cloud credentials
             credentials, _ = google.auth.default(
                 scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
             credentials.refresh(GoogleAuthRequest())
-
+            
+            # Connect to Gemini Live
             self.websocket = await ws_connect(
                 self.ws_url,
                 additional_headers={
@@ -114,12 +90,12 @@ class VoiceAgent:
                     "Authorization": f"Bearer {credentials.token}",
                 },
             )
+            
             logger.info("✅ Connected to Gemini Live WebSocket")
-
+            
+            # Send initial setup message
             # IMPORTANT: input_audio_transcription / output_audio_transcription are
             # siblings of generation_config inside "setup" — NOT nested inside it.
-            # language_codes belongs at the top level of generation_config,
-            # NOT inside speech_config.
             setup_message = {
                 "setup": {
                     "model": self.model_resource,
@@ -130,44 +106,50 @@ class VoiceAgent:
                                 "prebuilt_voice_config": {
                                     "voice_name": "Kore"
                                 }
-                            },
+                            }
                         },
                     },
                     "system_instruction": {
                         "parts": [{"text": self.system_prompt}]
                     },
+                    # Transcription at setup level (sibling of generation_config)
                     "input_audio_transcription": {},
                     "output_audio_transcription": {},
+                    # Prevent unprompted bot speech
                     "proactivity": {"proactive_audio": False},
                 }
             }
-
+            
             await self.websocket.send(json.dumps(setup_message))
             logger.info("📤 Sent setup message to Gemini")
-
+            
+            # Wait for setup complete
             setup_response = await self.websocket.recv()
             setup_data = json.loads(setup_response)
-
+            
             if "setupComplete" in setup_data:
                 logger.info("✅ Setup complete, conversation ready")
                 self.conversation_active = True
-
+                
+                # Start background tasks
                 self.receive_task = asyncio.create_task(self._receive_loop())
                 self.inactivity_task = asyncio.create_task(self._monitor_inactivity())
-
+                
+                # Send ready notification to client
                 if self.response_callback:
                     await self.response_callback({
                         "type": "ready",
                         "message": "Voice bot is ready to talk!"
                     })
-
-                # Trigger bot to speak first with the talk-off intro
+                
+                # Trigger bot to speak first (send initial user turn so model responds with intro)
                 await self._send_initial_trigger()
+                    
                 return True
             else:
                 logger.error(f"Setup failed: {setup_data}")
                 return False
-
+                
         except Exception as e:
             logger.error(f"❌ Failed to start conversation: {e}", exc_info=True)
             if self.response_callback:
@@ -176,11 +158,7 @@ class VoiceAgent:
                     "message": f"Failed to start: {str(e)}"
                 })
             return False
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # RECEIVE LOOP
-    # ──────────────────────────────────────────────────────────────────────────
-
+    
     async def _receive_loop(self):
         """Continuously receive and process messages from Gemini."""
         try:
@@ -189,63 +167,52 @@ class VoiceAgent:
                     raw_message = await self.websocket.recv()
                     message = json.loads(raw_message)
                     await self._handle_gemini_message(message)
+                    
                 except Exception as e:
                     if self.conversation_active:
                         logger.error(f"Error in receive loop: {e}")
+                        
         except asyncio.CancelledError:
             logger.info("Receive loop cancelled")
         except Exception as e:
             logger.error(f"Fatal error in receive loop: {e}", exc_info=True)
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # MESSAGE HANDLING
-    # ──────────────────────────────────────────────────────────────────────────
-
+    
     async def _handle_gemini_message(self, message: Dict[str, Any]):
-        """Process a single message from Gemini."""
+        """Process messages from Gemini."""
         try:
             server_content = message.get("serverContent") or message.get("server_content")
             if not server_content:
                 logger.debug(f"No serverContent in message keys: {list(message.keys())}")
                 return
 
-            # ── 1. Output transcription chunks (buffered until turnComplete) ──
-            out_tx = (
-                server_content.get("outputTranscription")
-                or server_content.get("output_transcription")
-            )
+            # ── 1. Output transcription chunks (buffer until turnComplete) ──
+            out_tx = server_content.get("outputTranscription") or server_content.get("output_transcription")
             if out_tx:
                 chunk = (out_tx.get("text") or "").strip()
                 if chunk:
+                    # Accumulate into buffer with a space separator
                     self._ai_turn_buf = (self._ai_turn_buf + " " + chunk).strip()
-                    # Strip tag from live UI stream — never display it
-                    display_chunk = chunk.replace("[SURVEY_COMPLETE]", "").strip()
-                    if display_chunk and self.response_callback:
+                    # Stream each chunk live to the UI transcript panel
+                    if self.response_callback:
                         await self.response_callback({
                             "type": "transcript_chunk",
                             "role": "assistant",
-                            "text": display_chunk
+                            "text": chunk
                         })
 
             # ── 2. Input transcription (user speech) ──
-            inp_tx = (
-                server_content.get("inputTranscription")
-                or server_content.get("input_transcription")
-            )
+            inp_tx = server_content.get("inputTranscription") or server_content.get("input_transcription")
             if inp_tx:
                 user_text = (inp_tx.get("text") or "").strip()
-                is_final = (
-                    inp_tx.get("isFinal")
-                    or inp_tx.get("is_final")
-                    or inp_tx.get("final")
-                    or False
-                )
+                is_final = inp_tx.get("isFinal") or inp_tx.get("is_final") or inp_tx.get("final") or False
                 if user_text:
+                    # Accumulate user speech
                     if not self._user_utt_buf:
                         self._user_utt_buf = user_text
                     elif not self._user_utt_buf.endswith(user_text):
                         self._user_utt_buf = (self._user_utt_buf + " " + user_text).strip()
                     logger.info(f"👤 User ({'final' if is_final else 'interim'}): {user_text}")
+                    # Stream to UI
                     if self.response_callback:
                         await self.response_callback({
                             "type": "transcript_chunk",
@@ -253,6 +220,7 @@ class VoiceAgent:
                             "text": user_text,
                             "is_final": is_final
                         })
+                    # Flush user buffer to history on final
                     if is_final and self._user_utt_buf:
                         self.conversation_history.append({
                             "role": "user",
@@ -271,47 +239,33 @@ class VoiceAgent:
                         chunk = part["text"].strip()
                         if chunk:
                             self._ai_turn_buf = (self._ai_turn_buf + " " + chunk).strip()
-                            display_chunk2 = chunk.replace("[SURVEY_COMPLETE]", "").strip()
-                            if display_chunk2 and self.response_callback:
+                            if self.response_callback:
                                 await self.response_callback({
                                     "type": "transcript_chunk",
                                     "role": "assistant",
-                                    "text": display_chunk2
+                                    "text": chunk
                                 })
 
             # ── 4. Audio chunks ──
             audio_data_out, sample_rate = self._decode_audio_output(message)
             if audio_data_out:
                 self._ai_is_speaking = True  # AI is outputting audio — block gender buffering
-                self._audio_chunk_count += 1
-
-                # Keep recording stream at 16 kHz (matches user mic rate)
-                resampled = self._resample_audio(audio_data_out, from_rate=sample_rate, to_rate=16000)
-                self.ai_audio_stream.extend(resampled)
-                self.user_audio_stream.extend(b"\x00" * len(resampled))
-
-                # If sample rate changed mid-stream, flush pending before switching
-                if sample_rate != self._pending_sr and self._pending_audio:
-                    await self._maybe_flush_audio(force=True)
-                self._pending_sr = sample_rate
-                self._pending_audio.extend(audio_data_out)
-
-                # Buffer first N chunks for smoother startup, then stream through immediately
-                await self._maybe_flush_audio(force=False)
+                if self.response_callback:
+                    await self.response_callback({
+                        "type": "audio",
+                        "data": base64.b64encode(audio_data_out).decode(),
+                        "sample_rate": sample_rate,
+                        "format": "pcm16"
+                    })
 
             # ── 5. Turn complete — flush AI buffer to history ──
             tc = server_content.get("turnComplete") or server_content.get("turn_complete")
             if tc:
-                self._ai_is_speaking = False  # AI finished — user audio may resume
-                # Flush any remaining buffered audio to client
-                await self._maybe_flush_audio(force=True)
-                # Reset chunk counter so next response gets the startup buffer again
-                self._audio_chunk_count = 0
+                self._ai_is_speaking = False  # AI finished — user audio may resume for gender buffering
                 full_ai_text = self._ai_turn_buf.strip()
                 self._ai_turn_buf = ""  # Reset buffer
 
                 if full_ai_text:
-                    # Store full text (with tag) in history for extraction detection
                     self.conversation_history.append({
                         "role": "assistant",
                         "text": full_ai_text,
@@ -321,8 +275,9 @@ class VoiceAgent:
                     self.turn_number += 1
                     logger.info(f"🤖 AI (full turn): {full_ai_text}")
 
-                    # Flush any pending user speech buffered before this turn
+                    # Also flush any pending user speech before this turn
                     if self._user_utt_buf:
+                        # Insert user turn before AI turn
                         self.conversation_history.insert(-1, {
                             "role": "user",
                             "text": self._user_utt_buf,
@@ -332,46 +287,20 @@ class VoiceAgent:
                         self.turn_number += 1
                         self._user_utt_buf = ""
 
-                    # Strip [SURVEY_COMPLETE] tag from UI display text only
-                    # The tag stays in conversation_history for extraction logic
-                    display_text = full_ai_text.replace("[SURVEY_COMPLETE]", "").strip()
-
-                    # Send final assembled turn to UI (tag stripped)
+                    # Send final assembled turn to UI
                     if self.response_callback:
                         await self.response_callback({
                             "type": "transcript",
                             "role": "assistant",
-                            "text": display_text
+                            "text": full_ai_text
                         })
 
-                    # ── Survey complete / Goodbye end-of-call detection ──────────
-                    # Checked ONLY on the full assembled turn (after turnComplete),
-                    # so the entire closing sentence is guaranteed to have been
-                    # spoken before this can fire.
-                    #
-                    # TWO trigger paths:
-                    #   1. [SURVEY_COMPLETE] tag emitted by the dynamic prompt_builder
-                    #   2. Goodbye words from GOODBYE_TRIGGERS (multilingual fallback)
-                    #
-                    # A grace period lets the client audio queue drain before
-                    # survey_complete fires — prevents the last sentence being cut off.
-                    survey_complete_tag = "[SURVEY_COMPLETE]" in full_ai_text
-                    goodbye_detected    = self._is_goodbye(full_ai_text)
-
-                    if (survey_complete_tag or goodbye_detected) and not self._survey_complete_sent:
+                    # Check goodbye trigger on full assembled text
+                    if self._is_goodbye(full_ai_text) and not self._survey_complete_sent:
                         self._survey_complete_sent = True
-                        trigger_reason = "[SURVEY_COMPLETE] tag" if survey_complete_tag else "goodbye phrase"
-                        logger.info(
-                            "👋 Call end detected (%s) — scheduling survey_complete after audio drain",
-                            trigger_reason
-                        )
-
-                        async def _delayed_survey_complete():
-                            await asyncio.sleep(7)  # allow client audio buffer to drain
-                            if self.response_callback:
-                                await self.response_callback({"type": "survey_complete"})
-
-                        asyncio.create_task(_delayed_survey_complete())
+                        logger.info("👋 Goodbye detected – triggering call end")
+                        if self.response_callback:
+                            await self.response_callback({"type": "survey_complete"})
 
                 logger.info("✅ AI turn complete")
                 if self.response_callback:
@@ -381,6 +310,7 @@ class VoiceAgent:
             if server_content.get("interrupted"):
                 logger.info("🤚 Bot interrupted by user")
                 self._ai_is_speaking = False  # Interrupted — user audio resumes
+                # Flush user buffer to history before clearing AI buffer
                 if self._user_utt_buf:
                     self.conversation_history.append({
                         "role": "user",
@@ -397,146 +327,122 @@ class VoiceAgent:
         except Exception as e:
             logger.error(f"Error handling Gemini message: {e}", exc_info=True)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # GOODBYE DETECTION
-    # ──────────────────────────────────────────────────────────────────────────
-
     def _is_goodbye(self, text: str) -> bool:
         """
         Return True only when the bot is clearly ending the call.
-
-        Uses config.GOODBYE_TRIGGERS as the single source of truth so this
-        method automatically covers every language defined there without
-        needing code changes when new languages are added to the config.
-
-        The trigger word must appear in the final 150 characters of the
-        assembled turn text — this prevents a casual mid-conversation
-        mention of any farewell word from firing the end-of-call logic.
-
-        Current languages covered (via GOODBYE_TRIGGERS in config.py):
-          English   → goodbye / good bye
-          Hindi     → अलविदा / alvida
-          Marathi   → निरोप / nirop
-          Tamil     → போயிட்டு வர்றேன் / poituvaren / vanakkam
-          Telugu    → వెళ్లొస్తాను / veltanu
-          Kannada   → ಹೋಗಿ ಬರ್ತೀನಿ / hogibistini
-          Malayalam → പോകുന്നു / pokunnu
-          Bengali   → আসছি / asche / aschi
-          Gujarati  → આવજો / aavjo
-          Urdu      → خدا حافظ / khuda hafiz
+        Only triggers on explicit farewell words near the end of the utterance.
+        Deliberately excludes 'take care', 'have a great day', 'thank you for your time'
+        as these all appear naturally mid-conversation and cause false positives.
         """
-        if not text:
-            return False
-
         text_lower = text.lower().strip()
-
-        # Normalise all triggers to lowercase for matching
-        triggers_lower = [t.lower() for t in GOODBYE_TRIGGERS]
-
-        # Fast path — bail early if no trigger appears anywhere in the text
-        if not any(t in text_lower for t in triggers_lower):
+        # Only these words are unambiguous end-of-call signals
+        # Includes Hindi farewell "alvida" and Marathi farewell "nirop" for regional language calls
+        farewell_words = ["goodbye", "good bye", "bye bye", "good night", "alvida", "अलविदा", "nirop", "निरोप"]
+        has_farewell = any(w in text_lower for w in farewell_words)
+        if not has_farewell:
             return False
-
-        # The trigger must appear near the END of the turn (final 150 chars),
-        # ensuring the full closing sentence has already been spoken.
-        tail = text_lower[-150:]
-        return any(t in tail for t in triggers_lower)
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # AUDIO UTILITIES
-    # ──────────────────────────────────────────────────────────────────────────
-
-    def _decode_audio_output(self, response: dict) -> tuple:
-        """Extract PCM audio bytes and sample rate from a Gemini response."""
+        # Must appear in the final 80 characters (i.e. the bot is signing off, not mid-sentence)
+        tail = text_lower[-80:]
+        return any(w in tail for w in farewell_words)
+    
+    def _decode_audio_output(self, response: dict) -> tuple[bytes, int]:
+        """Extract audio and sample rate from Gemini response."""
         result_bytes = []
         sample_rate = 24000
-
-        server_content = response.get("serverContent", {})
-        model_turn = server_content.get("modelTurn", {})
-
-        for part in model_turn.get("parts", []):
-            inline_data = part.get("inlineData", {})
-            mime_type_str = inline_data.get("mimeType", "")
-
-            if "audio" in mime_type_str.lower():
-                if "rate=" in mime_type_str:
+        
+        server_content = response.get('serverContent', {})
+        model_turn = server_content.get('modelTurn', {})
+        
+        for part in model_turn.get('parts', []):
+            inline_data = part.get('inlineData', {})
+            mime_type_str = inline_data.get('mimeType', '')
+            
+            if 'audio' in mime_type_str.lower():
+                # Extract sample rate if available
+                if 'rate=' in mime_type_str:
                     try:
-                        rate_str = mime_type_str.split("rate=")[1]
+                        rate_str = mime_type_str.split('rate=')[1]
                         sample_rate = int(rate_str)
                     except (ValueError, IndexError):
                         pass
-
-                data = inline_data.get("data", "")
+                
+                # Decode audio data
+                data = inline_data.get('data', '')
                 if data:
                     try:
-                        result_bytes.append(base64.b64decode(data))
+                        decoded_chunk = base64.b64decode(data)
+                        result_bytes.append(decoded_chunk)
                     except Exception as e:
                         logger.error(f"Error decoding audio: {e}")
-
-        return b"".join(result_bytes), sample_rate
-
+        
+        return b''.join(result_bytes), sample_rate
+    
     async def send_audio(self, audio_data: bytes):
         """Send user audio to Gemini and buffer for gender detection."""
         if not self.conversation_active or not self.websocket:
             return
-
+        
         try:
             self.last_audio_time = time.time()
             self.audio_buffer.append(audio_data)
 
-            # Gender detection: buffer ~3 seconds of actual user speech
+            # ── Gender detection: buffer ~3 seconds of VALID user speech ──
+            # Fix: Only buffer if AI is quiet AND the audio isn't just silence
             if not self._gender_analysis_triggered and not self._ai_is_speaking:
+                
+                # Check if this specific chunk contains actual speech (volume check)
                 if self._is_speech(audio_data):
                     self._gender_sample_buffer.extend(audio_data)
+                    
+                    # Log progress occasionally so we know it's working
                     if len(self._gender_sample_buffer) % 16000 == 0:
-                        logger.debug(
-                            f"🎙️ Gender buffer: {len(self._gender_sample_buffer)}/96000 bytes"
-                        )
+                        logger.debug(f"🎙️ Gender buffer progress: {len(self._gender_sample_buffer)}/96000 bytes")
 
                 if len(self._gender_sample_buffer) >= 96000:
                     self._gender_analysis_triggered = True
-                    logger.info("🎙️ Collected 3s of user speech — launching gender classification")
+                    logger.info("🎙️ Collected 3s of active user speech – launching gender classification")
                     asyncio.create_task(
                         self._classify_gender_via_async_llm(
                             bytearray(self._gender_sample_buffer[:96000])
                         )
                     )
-
-            # Buffer user audio in recording stream (AI side gets silence padding)
-            if self._is_speech(audio_data):
-                self.user_audio_stream.extend(audio_data)
-            else:
-                self.user_audio_stream.extend(b"\x00" * len(audio_data))
-
+            
+            # Send buffered audio to Gemini
             current_time = time.time() * 1000
             if current_time - self.last_send_time >= self.min_chunk_interval_ms:
-                await self._flush_to_gemini()
-
+                await self._flush_audio()
+                
         except Exception as e:
             logger.error(f"Error sending audio: {e}")
-
+    
     def _is_speech(self, audio_data: bytes, threshold: int = 500) -> bool:
-        """RMS volume check — distinguishes actual speech from silence/background hum."""
+        """
+        Simple RMS (Root Mean Square) volume check to distinguish 
+        actual speech from silence/background hum.
+        """
         if not audio_data:
             return False
+        # Convert bytes to Int16 array
         audio_np = np.frombuffer(audio_data, dtype=np.int16)
-        rms = np.sqrt(np.mean(audio_np.astype(np.float32) ** 2))
+        # Calculate RMS (Volume)
+        rms = np.sqrt(np.mean(audio_np.astype(np.float32)**2))
         return rms > threshold
-
-    async def _flush_to_gemini(self, force: bool = False):
-        """Send buffered USER audio chunks upstream to Gemini."""
+    
+    async def _flush_audio(self, force: bool = False):
+        """Send buffered audio to Gemini."""
         if not self.audio_buffer:
             return
-
+        
         try:
-            combined_audio = b"".join(self.audio_buffer)
+            combined_audio = b''.join(self.audio_buffer)
             self.audio_buffer.clear()
-
+            
             if not combined_audio:
                 return
-
+            
+            # Encode and send
             encoded_audio = base64.b64encode(combined_audio).decode()
-
+            
             message = {
                 "realtimeInput": {
                     "mediaChunks": [
@@ -547,120 +453,36 @@ class VoiceAgent:
                     ]
                 }
             }
-
+            
             await self.websocket.send(json.dumps(message))
             self.last_send_time = time.time() * 1000
-
+            
         except Exception as e:
-            logger.error(f"Error flushing audio to Gemini: {e}")
-
-    # ── Outbound audio to client ───────────────────────────────────────────────
-
-    async def _flush_audio(self):
-        """Send accumulated AI→client PCM immediately via response_callback."""
-        if not self._pending_audio or not self.response_callback or not self.conversation_active:
-            return
-        audio_base64 = base64.b64encode(bytes(self._pending_audio)).decode("utf-8")
-        try:
-            await self.response_callback({
-                "type": "audio",
-                "data": audio_base64,
-                "sample_rate": self._pending_sr,
-                "format": "pcm16",
-            })
-        except Exception as e:
-            logger.debug(f"Could not send audio chunk to client: {e}")
-            return
-        self._pending_audio.clear()
-        self._last_flush = time.monotonic()
-
-    async def _maybe_flush_audio(self, force: bool = False):
-        """
-        Stream AI audio to the client.
-
-        Mirrors the reference agent strategy:
-        - Hold back the first _min_chunks_before_flush chunks so the client
-          AudioWorklet has a small startup buffer (prevents underruns / choppy
-          start of each response).
-        - After that, flush every chunk immediately — the client is responsible
-          for smooth playback buffering from that point on.
-        - force=True bypasses the startup hold (used on sample-rate change or
-          turn-end cleanup).
-        """
-        if not self.response_callback or not self.conversation_active:
-            return
-        if not self._pending_audio:
-            return
-        if not force and self._audio_chunk_count < self._min_chunks_before_flush:
-            return  # still in startup buffer phase
-        await self._flush_audio()
-        self._last_flush = time.monotonic()
-
-    def _resample_audio(self, pcm_data: bytes, from_rate: int, to_rate: int) -> bytes:
-        """
-        Linear-interpolation resampler for 16-bit mono PCM.
-        Used to downsample AI audio (24 kHz) to 16 kHz for the recording stream.
-        Playback stream always uses the original sample rate.
-        """
-        if from_rate == to_rate:
-            return pcm_data
-        num_samples = len(pcm_data) // 2
-        ratio = from_rate / to_rate
-        resampled = bytearray()
-        for i in range(int(num_samples / ratio)):
-            fi = i * ratio
-            idx = int(fi)
-            if (idx + 1) * 2 > len(pcm_data):
-                break
-            s1 = int.from_bytes(pcm_data[idx*2:idx*2+2], "little", signed=True)
-            s2 = int.from_bytes(pcm_data[(idx+1)*2:(idx+1)*2+2], "little", signed=True)
-            frac = fi - idx
-            sample = int(s1 * (1 - frac) + s2 * frac)
-            resampled.extend(sample.to_bytes(2, "little", signed=True))
-        return bytes(resampled)
-
-    def _trim_silence(self, pcm_data: bytes, threshold: int = 500) -> bytes:
-        """Strip leading and trailing silence from a 16-bit mono PCM chunk."""
-        if not pcm_data:
-            return b""
-        audio_np = np.frombuffer(pcm_data, dtype=np.int16)
-        non_silent = np.where(np.abs(audio_np) > threshold)[0]
-        if len(non_silent) == 0:
-            return b""
-        return audio_np[non_silent[0]:non_silent[-1] + 1].tobytes()
-
-    def _generate_wav_header(
-        self,
-        sample_rate: int,
-        num_frames: int,
-        num_channels: int,
-        sample_width: int,
-    ) -> bytes:
+            logger.error(f"Error flushing audio: {e}")
+    
+    def _generate_wav_header(self, sample_rate: int, num_frames: int,
+                             num_channels: int, sample_width: int) -> bytes:
         """Build a WAV file header for the given PCM properties."""
         byte_rate = sample_rate * num_channels * sample_width
         block_align = num_channels * sample_width
         return struct.pack(
-            "<4sI4s4sIHHIIHH4sI",
-            b"RIFF",
+            '<4sI4s4sIHHIIHH4sI',
+            b'RIFF',
             36 + num_frames * block_align,
-            b"WAVE",
-            b"fmt ",
+            b'WAVE',
+            b'fmt ',
             16, 1,
             num_channels, sample_rate,
             byte_rate, block_align,
             sample_width * 8,
-            b"data",
+            b'data',
             num_frames * block_align,
         )
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # GENDER CLASSIFICATION
-    # ──────────────────────────────────────────────────────────────────────────
-
     async def _classify_gender_via_async_llm(self, audio_buffer: bytearray):
         """
-        Send ~3 seconds of PCM audio to Gemini to detect the speaker's gender.
-        Fires once per call and runs in a thread so it never blocks the event loop.
+        Send ~3 seconds of PCM audio to Gemini (text model) to detect speaker gender.
+        Fires once per call, runs in a thread so it never blocks the event loop.
         """
         try:
             import vertexai
@@ -673,9 +495,10 @@ class VoiceAgent:
             logger.info(f"🎙️ Gender sample duration: {duration_sec:.2f}s")
 
             if duration_sec < 1.0:
-                logger.info("🎙️ Sample too short — skipping gender classification")
+                logger.info("🎙️ Sample too short – skipping gender classification")
                 return
 
+            # Build a proper WAV file from raw PCM
             header = self._generate_wav_header(
                 sample_rate=sample_rate,
                 num_frames=len(audio_buffer) // sample_width,
@@ -691,12 +514,9 @@ class VoiceAgent:
                 '{"gender": "male" or "female" or "unknown", "confidence": 0.0 to 1.0}'
             )
 
-            candidate_models = [
-                "gemini-2.0-flash-001",
-                "gemini-2.0-flash",
-                "gemini-1.5-flash-002",
-                "gemini-1.5-flash-001",
-            ]
+            # Try models in order (same fallback strategy as survey_storage)
+            candidate_models = ["gemini-2.0-flash-001", "gemini-2.0-flash",
+                                 "gemini-1.5-flash-002", "gemini-1.5-flash-001"]
 
             def sync_classify():
                 vertexai.init(project=VERTEX_PROJECT_ID, location=VERTEX_LOCATION)
@@ -716,10 +536,9 @@ class VoiceAgent:
                 ThreadPoolExecutor(max_workers=1), sync_classify
             )
 
+            # Strip markdown fences if present
             if "```" in response_text:
-                response_text = (
-                    response_text.replace("```json", "").replace("```", "").strip()
-                )
+                response_text = response_text.replace("```json", "").replace("```", "").strip()
 
             result = json.loads(response_text)
             detected = (result.get("gender") or "unknown").lower()
@@ -727,11 +546,14 @@ class VoiceAgent:
 
             logger.info(f"🎙️ ✅ Gender detected: {detected} (confidence: {confidence:.2f})")
 
+            # Store on agent for use in transcript/sheet
             self.detected_gender = detected
             self.gender_confidence = confidence
 
+            # Map to M/F/Unknown for the sheet
             gender_label = {"male": "M", "female": "F"}.get(detected, "Unknown")
 
+            # Notify client so UI can display it immediately
             if self.response_callback:
                 await self.response_callback({
                     "type": "voice_gender_update",
@@ -743,10 +565,6 @@ class VoiceAgent:
         except Exception as e:
             logger.error(f"🎙️ Gender classification failed: {e}", exc_info=True)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # CONVERSATION CONTROL
-    # ──────────────────────────────────────────────────────────────────────────
-
     async def _send_initial_trigger(self):
         """Send a minimal user turn so the model speaks first with the talk-off."""
         try:
@@ -757,66 +575,70 @@ class VoiceAgent:
                     "turns": [
                         {"role": "user", "parts": [{"text": "Begin the survey."}]}
                     ],
-                    "turnComplete": True,
+                    "turnComplete": True
                 }
             }
             await self.websocket.send(json.dumps(trigger))
-            logger.info("📤 Sent initial trigger — bot will speak first")
+            logger.info("📤 Sent initial trigger so bot speaks first")
         except Exception as e:
             logger.error(f"Error sending initial trigger: {e}")
-
+    
     async def _monitor_inactivity(self):
-        """End conversation automatically after prolonged silence."""
+        """Monitor for inactivity and end conversation if timeout exceeded."""
         try:
             while self.conversation_active:
-                await asyncio.sleep(5)
+                await asyncio.sleep(5)  # Check every 5 seconds
+                
                 if time.time() - self.last_audio_time > self.inactivity_timeout:
                     logger.info("⏰ Inactivity timeout reached")
+                    
                     if self.response_callback:
                         await self.response_callback({
                             "type": "inactivity_timeout",
-                            "message": "Conversation ended due to inactivity",
+                            "message": "Conversation ended due to inactivity"
                         })
+                    
                     await self.end_conversation()
                     break
+                    
         except asyncio.CancelledError:
             logger.info("Inactivity monitor cancelled")
-
+    
     async def end_conversation(self):
-        """End the conversation and clean up all resources."""
+        """End the conversation and cleanup."""
         if not self.conversation_active:
             return
-
+        
         logger.info("🛑 Ending conversation")
         self.conversation_active = False
-
+        
         try:
-            # Flush any buffered user audio upstream to Gemini
-            await self._flush_to_gemini(force=True)
-            # Flush any remaining AI audio to the client
-            await self._maybe_flush_audio(force=True)
-
+            # Flush any remaining audio
+            await self._flush_audio(force=True)
+            
+            # Cancel tasks
             if self.receive_task:
                 self.receive_task.cancel()
             if self.inactivity_task:
                 self.inactivity_task.cancel()
-
+            
+            # Close WebSocket
             if self.websocket:
                 await self.websocket.close()
                 self.websocket = None
-
+            
+            # Send final notification
             if self.response_callback:
                 await self.response_callback({
                     "type": "conversation_ended",
                     "turns": self.turn_number,
                     "duration": time.time() - (
-                        self.conversation_history[0]["timestamp"]
-                        if self.conversation_history
-                        else time.time()
-                    ),
+                        self.conversation_history[0]["timestamp"] 
+                        if self.conversation_history else time.time()
+                    )
                 })
-
+            
             logger.info("✅ Conversation ended successfully")
-
+            
         except Exception as e:
             logger.error(f"Error ending conversation: {e}", exc_info=True)
